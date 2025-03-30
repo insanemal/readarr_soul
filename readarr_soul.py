@@ -20,7 +20,7 @@ from datetime import datetime
 import music_tag
 import slskd_api
 from pyarr import LidarrAPI
-
+from pyarr import ReadarrAPI
 
 logger = logging.getLogger('soularr')
 #Allows backwards compatability for users updating an older version of Soularr
@@ -197,49 +197,11 @@ def choose_release(artist_name, releases):
 
 
 def verify_filetype(file,allowed_filetype):
-    current_filetype = file['filename'].split(".")[-1]
+    current_filetype = file['filename'].split(".")[-1].lower()
     logger.debug(f"Current file type: {current_filetype}")
-    bitdepth = None
-    samplerate = None
-    bitrate = None
 
-    if 'bitRate' in file:
-        bitrate = file['bitRate']
-    if 'sampleRate' in file:
-        samplerate = file['sampleRate']
-    if 'bitDepth' in file:
-        bitdepth = file['bitDepth']
-
-    #Check if the types match up for the current files type and the current type from the config
     if current_filetype == allowed_filetype.split(" ")[0]:
-        #Check if the current type from the config specifies other attributes than the filetype (bitrate etc)
-        if " " in allowed_filetype:
-            selected_attributes = allowed_filetype.split(" ")[1]
-            #If it is a bitdepth/samplerate pair instead of a simple bitrate
-            if "/" in selected_attributes:
-                selected_bitdepth = selected_attributes.split("/")[0]
-                try:
-                    selected_samplerate = str(int(float(selected_attributes.split("/")[1]) * 1000))
-                except (ValueError, IndexError):
-                    logger.warning("Invalid samplerate in selected_attributes")
-                    return False
-
-                if bitdepth and samplerate:
-                    if str(bitdepth) == str(selected_bitdepth)and str(samplerate) == str(selected_samplerate):
-                        return True
-                else:
-                    return False
-            #If it is a bitrate
-            else:
-                selected_bitrate = selected_attributes
-                if bitrate:
-                    if str(bitrate) == str(selected_bitrate):
-                        return True
-                else:
-                    return False
-        #If no bitrate or other info then it is a match so return true
-        else:
-            return True
+        return True
     else:
         return False
 
@@ -275,19 +237,61 @@ def check_for_match(dir_cache, search_cache, tracks, allowed_filetype):
                         else:
                             return False, '', {}, ''
             return False, "", {}, ""
+def gen_allowed_filetypes(qprofile):
+#{'cutoff': 2,
+# 'cutoffFormatScore': 0,
+# 'formatItems': [],
+# 'id': 1,
+# 'items': [{'allowed': False,
+#            'items': [],
+#            'quality': {'id': 0, 'name': 'Unknown Text'}},
+#           {'allowed': False, 'items': [], 'quality': {'id': 1, 'name': 'PDF'}},
+#           {'allowed': True, 'items': [], 'quality': {'id': 2, 'name': 'MOBI'}},
+#           {'allowed': True, 'items': [], 'quality': {'id': 3, 'name': 'EPUB'}},
+#           {'allowed': True, 'items': [], 'quality': {'id': 4, 'name': 'AZW3'}},
+#           {'allowed': False,
+#            'items': [],
+#            'quality': {'id': 13, 'name': 'Unknown Audio'}},
+#           {'allowed': False,
+#            'items': [],
+#            'quality': {'id': 10, 'name': 'MP3'}},
+#           {'allowed': False,
+#            'items': [],
+#            'quality': {'id': 12, 'name': 'M4B'}},
+#           {'allowed': False,
+#            'items': [],
+#            'quality': {'id': 11, 'name': 'FLAC'}}],
+# 'minFormatScore': 0,
+# 'name': 'eBook',
+# 'upgradeAllowed': False}
+    allowed_filetypes = []
+    for item in qprofile['items']:
+        if item['allowed']:
+            allowed_type = item['quality']['name'].lower()
+            allowed_filetypes.append(allowed_type)
+    allowed_filetypes.reverse()
+    return allowed_filetypes
+            
 
-def search_and_download(grab_list, album, retry_list):
-    artist_name = album['artist']['artistName']
-    artist_id = album['artistId']
-    album_id = album['id']
-    album_title = lidarr.get_album(album_id)['title']
+
+def search_and_download(grab_list, target, retry_list):
+    book = target['book']
+    author = target['author']
+    qprofile = target['filetypes']
+    artist_name = author['authorName']
+    artist_id = author['id']
+    album_id = book['id']
+    album_title = book['title']
+    allowed_filetypes = gen_allowed_filetypes(qprofile)
+
     if is_blacklisted(album_title):
-       return False, artist_name 
+       return False 
+    query = book['authorTitle']
 
-    if len(album_title) == 1:
-        query = '"' + artist_name + '"' + " " + album_title
-    else:
-        query = '"' + artist_name + '"' + " " + album_title if config.getboolean('Search Settings', 'album_prepend_artist', fallback=False) else album_title
+    #if len(album_title) == 1:
+    #    query = '"' + artist_name + '"' + " " + album_title
+    #else:
+    #    query = '"' + artist_name + '"' + " " + album_title if config.getboolean('Search Settings', 'album_prepend_artist', fallback=False) else album_title
 
     logger.info(f"Searching album: {query}")
     search = slskd.searches.search_text(searchText = query,
@@ -485,14 +489,19 @@ def is_blacklisted(title: str) -> bool:
     return False
 
 
-def grab_most_wanted(albums):
+def grab_most_wanted(download_targets):
     grab_list = []
     failed_download = 0
     success = False
     retry_list = {}
 
-    for album in albums:
-        success, artist_name = search_and_download(grab_list, album, retry_list)
+    for target in download_targets:
+        book = target['book']
+        author = target['author']
+        qprofile = target['filetypes']
+        artist_name = author['authorName']
+
+        success = search_and_download(grab_list, target, retry_list)
 
 
         #if not success and config.getboolean('Search Settings', 'search_for_tracks', fallback=True):
@@ -519,21 +528,22 @@ def grab_most_wanted(albums):
 
         if not success:
             if remove_wanted_on_failure:
-                logger.error(f"Failed to grab album: {album['title']} for artist: {artist_name}."
+                logger.error(f"Failed to grab album: {book['title']} for artist: {artist_name}."
                     + ' Failed album removed from wanted list and added to "failure_list.txt"')
 
-                album['monitored'] = False
-                lidarr.upd_album(album)
+                book['monitored'] = False
+                edition = readarr.get_edition(book['id'])
+                readarr.upd_book(book=book, editions=edition)
 
                 current_datetime = datetime.now()
                 current_datetime_str = current_datetime.strftime("%d/%m/%Y %H:%M:%S")
 
-                failure_string = current_datetime_str + " - " + artist_name + ", " + album['title'] + ", " + str(album_id) + "\n"
+                failure_string = current_datetime_str + " - " + artist_name + ", " + book['title'] + "\n"
 
                 with open(failure_file_path, "a") as file:
                     file.write(failure_string)
             else:
-                logger.error(f"Failed to grab album: {album['title']} for artist: {artist_name}")
+                logger.error(f"Failed to grab album: {book['title']} for artist: {artist_name}")
 
             failed_download += 1
 
@@ -757,21 +767,23 @@ def update_current_page(path: str, page: int) -> None:
             file.write(page)
 
 
-def get_records(missing: bool) -> list:
+def get_books(missing: bool) -> list:
     try:
-        wanted = lidarr.get_wanted(page_size=page_size, sort_dir='ascending',sort_key='albums.title', missing=missing)
+        pprint.pprint(page_size)
+        wanted = readarr.get_missing(page_size=page_size, sort_dir='ascending',sort_key='title')
     except ConnectionError as ex:
         logger.error(f"An error occurred when attempting to get records: {ex}")
         return []
 
     total_wanted = wanted['totalRecords']
+    pprint.pprint(wanted)
 
     wanted_records = []
     if search_type == 'all':
         page = 1
         while len(wanted_records) < total_wanted:
             try:
-                wanted = lidarr.get_wanted(page=page, page_size=page_size, sort_dir='ascending',sort_key='albums.title', missing=missing)
+                wanted = readarr.get_missing(page=page, page_size=page_size, sort_dir='ascending',sort_key='title')
             except ConnectionError as ex:
                 logger.error(f"Failed to grab record: {ex}")
             wanted_records.extend(wanted['records'])
@@ -780,7 +792,7 @@ def get_records(missing: bool) -> list:
     elif search_type == 'incrementing_page':
         page = get_current_page(current_page_file_path)
         try:
-            wanted_records = lidarr.get_wanted(page=page, page_size=page_size, sort_dir='ascending',sort_key='albums.title', missing=missing)['records']
+            wanted_records = readarr.get_missing(page=page, page_size=page_size, sort_dir='ascending',sort_key='title')['records']
         except ConnectionError as ex:
             logger.error(f"Failed to grab record: {ex}")
         page = 1 if page >= math.ceil(total_wanted / page_size) else page + 1
@@ -824,14 +836,14 @@ config_file_path = os.path.join(args.config_dir, "config.ini")
 failure_file_path = os.path.join(args.config_dir, "failure_list.txt")
 current_page_file_path = os.path.join(args.config_dir, ".current_page.txt")
 
-#if not is_docker() and os.path.exists(lock_file_path):
-#    logger.info(f"Soularr instance is already running.")
-#    sys.exit(1)
+if not is_docker() and os.path.exists(lock_file_path):
+    logger.info(f"Soularr instance is already running.")
+    sys.exit(1)
 
 try:
-    #if not is_docker():
-    #    with open(lock_file_path, "w") as lock_file:
-    #        lock_file.write("locked")
+    if not is_docker():
+        with open(lock_file_path, "w") as lock_file:
+            lock_file.write("locked")
 
     # Disable interpolation to make storing logging formats in the config file much easier
     config = configparser.ConfigParser(interpolation=None)
@@ -851,14 +863,14 @@ try:
         sys.exit(0)
 
     slskd_api_key = config['Slskd']['api_key']
-    lidarr_api_key = config['Lidarr']['api_key']
+    readarr_api_key = config['Readarr']['api_key']
 
-    lidarr_download_dir = config['Lidarr']['download_dir']
-    lidarr_disable_sync = config.getboolean('Lidarr', 'disable_sync', fallback=False)
+    lidarr_download_dir = config['Readarr']['download_dir']
+    lidarr_disable_sync = config.getboolean('Readarr', 'disable_sync', fallback=False)
 
     slskd_download_dir = config['Slskd']['download_dir']
 
-    lidarr_host_url = config['Lidarr']['host_url']
+    readarr_host_url = config['Readarr']['host_url']
     slskd_host_url = config['Slskd']['host_url']
 
     stalled_timeout = config.getint('Slskd', 'stalled_timeout', fallback=3600)
@@ -887,37 +899,41 @@ try:
     accepted_countries = config.get('Release Settings', 'accepted_countries', fallback=default_accepted_countries).split(",")
     accepted_formats = config.get('Release Settings', 'accepted_formats', fallback=default_accepted_formats).split(",")
 
-    raw_filetypes = config.get('Search Settings', 'allowed_filetypes', fallback='flac,mp3')
 
     download_filtering = config.getboolean('Download Settings', 'download_filtering', fallback=False)
     use_extension_whitelist = config.getboolean('Download Settings', 'use_extension_whitelist', fallback=False)
     extensions_whitelist = config.get('Download Settings', 'extensions_whitelist', fallback='txt,nfo,jpg').split(',')
 
-    if "," in raw_filetypes:
-        allowed_filetypes = raw_filetypes.split(",")
-    else:
-        allowed_filetypes = [raw_filetypes]
-
     setup_logging(config)
 
 
     slskd = slskd_api.SlskdClient(host=slskd_host_url, api_key=slskd_api_key, url_base=slskd_url_base)
-    lidarr = LidarrAPI(lidarr_host_url, lidarr_api_key)
-    wanted_records = []
+    readarr = ReadarrAPI(readarr_host_url, readarr_api_key)
+#    lidarr = LidarrAPI(lidarr_host_url, lidarr_api_key)
+    wanted_books = []
 
     try:
         for source in search_sources:
             logging.debug(f'Getting records from {source}')
             missing = source == 'missing'
-            wanted_records.extend(get_records(missing))
+            wanted_books.extend(get_books(missing))
     except ValueError as ex:
         logger.error(f'An error occured: {ex}')
         logger.error('Exiting...')
         sys.exit(0)
+    pprint.pprint(wanted_books)
+    download_targets = []
+    if len(wanted_books) > 0:
+        for book in wanted_books:
+            authorID = book['authorId']
+            author = readarr.get_author(authorID)
+            qprofile = readarr.get_quality_profile(author['qualityProfileId'])
+            download_targets.append({'book':book,'author':author,'filetypes':qprofile})
 
-    if len(wanted_records) > 0:
+
+    if len(download_targets) > 0:
         try:
-            failed = grab_most_wanted(wanted_records)
+            failed = grab_most_wanted(download_targets)
         except Exception:
             logger.error(traceback.format_exc())
             logger.error("\n Fatal error! Exiting...")
