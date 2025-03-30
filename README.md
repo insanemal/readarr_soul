@@ -9,6 +9,8 @@
 
 # About
 
-WIP. Fork of Soularr to do the same with Readarr
+WIP. Fork of Soularr to do the same with Readarr.
+
+IT DOES NOT WORK YET.
 
 
