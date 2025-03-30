@@ -1,0 +1,39 @@
+#osx
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# cache
+__pycache__
+.idea
+.cache
+
+# python
+*.pyc
+.venv
+venv
+
+# PyPi
+dist
+build
+.vscode/*
+*.egg-info
+.mypy_cache
+.pytest_cache
+.coverage
+coverage.xml
+_build
+.nox
+
+tests/docker_configs/sonarr/*
+!tests/docker_configs/sonarr/config.xml
+tests/docker_configs/radarr/*
+!tests/docker_configs/radarr/config.xml
+tests/docker_configs/readarr/*
+!tests/docker_configs/readarr/config.xml
+tests/docker_configs/lidarr/*
+!tests/docker_configs/lidarr/config.xml
+tests/docker_configs/deluge/*
+tests/docker_configs/jackett/*
+!tests/docker_configs/jackett/config/jackett/Jackett/ServerConfig.json
+core.*
