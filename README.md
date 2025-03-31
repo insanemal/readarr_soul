@@ -11,6 +11,6 @@
 
 WIP. Fork of Soularr to do the same with Readarr.
 
-IT DOES NOT WORK YET.
+It works. Mostly. Doesn't have a container built. So you're on your own!
 
 
