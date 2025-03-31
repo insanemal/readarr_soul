@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
+import sys
+sys.path.append(sys.path[0]+'./pyarr/') 
 import argparse
 import math
 import re
 import os
-import sys
 import time
 import shutil
 import difflib
@@ -19,7 +20,6 @@ import pprint
 from datetime import datetime
 import music_tag
 import slskd_api
-from pyarr import LidarrAPI
 from pyarr import ReadarrAPI
 
 logger = logging.getLogger('soularr')
@@ -31,49 +31,54 @@ DEFAULT_LOGGING_CONF = {
     'datefmt': '%Y-%m-%dT%H:%M:%S%z',
 }
 
-def album_match(lidarr_tracks, slskd_tracks, username, filetype):
+def album_match(target, slskd_tracks, username, filetype):
     counted = []
     total_match = 0.0
 
-    lidarr_album = lidarr.get_album(lidarr_tracks[0]['albumId'])
-    lidarr_album_name = lidarr_album['title']
-    lidarr_artist_name = lidarr_album['artist']['artistName']
+    book_title = target['book']['title']
+    artist_name = target['author']['authorName']
 
-    for lidarr_track in lidarr_tracks:
-        lidarr_filename = lidarr_track['title'] + "." + filetype.split(" ")[0]
-        best_match = 0.0
+    best_match = 0.0
+    current_match = None
 
-        for slskd_track in slskd_tracks:
-            slskd_filename = slskd_track['filename']
+    for slskd_track in slskd_tracks:
 
-            #Try to match the ratio with the exact filenames
-            ratio = difflib.SequenceMatcher(None, lidarr_filename, slskd_filename).ratio()
+        book_filename = book_title+" - "+artist_name + "." + filetype.split(" ")[0]
+        slskd_filename = slskd_track['filename']
 
-            #If ratio is a bad match try and split off (with " " as the seperator) the garbage at the start of the slskd_filename and try again
-            ratio = check_ratio(" ", ratio, lidarr_filename, slskd_filename)
-            #Same but with "_" as the seperator
-            ratio = check_ratio("_", ratio, lidarr_filename, slskd_filename)
+        logger.info(f"Checking ratio on {slskd_filename} vs {book_filename}")
+        #Try to match the ratio with the exact filenames
+        ratio = difflib.SequenceMatcher(None, book_filename, slskd_filename).ratio()
 
-            #Same checks but preappend album name.
-            ratio = check_ratio("", ratio, lidarr_album_name + " " + lidarr_filename, slskd_filename)
-            ratio = check_ratio(" ", ratio, lidarr_album_name + " " + lidarr_filename, slskd_filename)
-            ratio = check_ratio("_", ratio, lidarr_album_name + " " + lidarr_filename, slskd_filename)
 
-            if ratio > best_match:
-                best_match = ratio
+        #If ratio is a bad match try and split off (with " " as the seperator) the garbage at the start of the slskd_filename and try again
+        ratio = check_ratio(" ", ratio, book_filename, slskd_filename)
+        #Same but with "_" as the seperator
+        ratio = check_ratio("_", ratio, book_filename, slskd_filename)
 
-        if best_match > minimum_match_ratio:
-            counted.append(lidarr_filename)
-            total_match += best_match
+        #Same checks but preappend album name.
+        book_filename = artist_name+" - "+book_title + "." + filetype.split(" ")[0]
+        ratio = check_ratio("", ratio ,  book_filename, slskd_filename)
+        ratio = check_ratio(" ", ratio,  book_filename, slskd_filename)
+        ratio = check_ratio("_", ratio,  book_filename, slskd_filename)
 
-    if len(counted) == len(lidarr_tracks) and username not in ignored_users:
-        logger.info(f"Found match from user: {username} for {len(counted)} tracks! Track attributes: {filetype}")
-        logger.info(f"Average sequence match ratio: {total_match/len(counted)}")
+        if ratio > best_match:
+            logger.info(f"Current best match is {ratio}")
+            best_match = ratio
+            current_match = slskd_track
+
+
+    logger.info(f"Username is {username}")
+    logger.info(f"Ratio is {best_match}")
+
+    if (current_match != None) and (username not in ignored_users) and (best_match > minimum_match_ratio):
+        logger.info(f"Found match from user: {username} for book! Track attributes: {filetype}")
+        logger.info(f"Average sequence match ratio: {total_match}")
         logger.info("SUCCESSFUL MATCH")
         logger.info("-------------------")
-        return True
+        return current_match
 
-    return False
+    return None
 
 
 def check_ratio(separator, ratio, lidarr_filename, slskd_filename):
@@ -205,7 +210,7 @@ def verify_filetype(file,allowed_filetype):
     else:
         return False
 
-def check_for_match(dir_cache, search_cache, tracks, allowed_filetype):
+def check_for_match(dir_cache, search_cache, target, allowed_filetype):
             for username in dir_cache:
                 if not allowed_filetype in dir_cache[username]:
                     continue
@@ -228,15 +233,14 @@ def check_for_match(dir_cache, search_cache, tracks, allowed_filetype):
 
                     directory = copy.deepcopy(search_cache[username][file_dir])
 
-                    track_num = len(tracks)
-                    tracks_info = album_track_num(directory)
 
-                    if tracks_info['count'] == track_num and tracks_info['filetype'] != "":
-                        if album_match(tracks, directory['files'], username, allowed_filetype):
-                            return True, username, directory, file_dir
-                        else:
-                            return False, '', {}, ''
-            return False, "", {}, ""
+                    result = album_match(target, directory['files'], username, allowed_filetype)
+                    if result != None:
+                        return True, username, directory, file_dir, result
+                    else:
+                        continue
+            return False, "", {}, "", None
+
 def gen_allowed_filetypes(qprofile):
 #{'cutoff': 2,
 # 'cutoffFormatScore': 0,
@@ -303,7 +307,6 @@ def search_and_download(grab_list, target, retry_list):
     time.sleep(10)
     while True:
         state = slskd.searches.state(search['id'],False)['state']
-        pprint.pprint(state)
         if state != 'InProgress':
             break
         time.sleep(1)
@@ -330,83 +333,14 @@ def search_and_download(grab_list, target, retry_list):
     
     for allowed_filetype in allowed_filetypes:
         logger.info(f"Serching for matches with selected attributes: {allowed_filetype}")
-        releases = lidarr.get_album(album_id)['releases']
-        num_releases = len(releases)
-        for i in range(0,num_releases):
-            if len(releases) == 0:
-                break
-            release = choose_release(artist_name, releases)
-            releases.remove(release)
-            release_id = release['id']            
-            all_tracks = lidarr.get_tracks(artistId = artist_id, albumId = album_id, albumReleaseId = release_id)
-
-            #search for all tracks
-            found, username, directory, file_dir= check_for_match(dir_cache, search_cache, all_tracks, allowed_filetype)       
-            
-
-            #if multi_album split track lists and search all media
-            if not found and len(release['media']) > 1:
-                download_list = {}
-                found_count = 0
-                for media in release['media']:
-                    tracks = []
-                    for track in all_tracks:
-                        if track['mediumNumber'] == media['mediumNumber']:
-                            tracks.append(track)
-                    found, username, directory, file_dir = check_for_match(dir_cache,search_cache,tracks,allowed_filetype)
-                    if found:
-                        if username not in download_list:
-                            download_list[username] = {}
-                        download_list[username][file_dir] = {} 
-                        download_list[username][file_dir]['directory'] = directory
-                        download_list[username][file_dir]['tracks'] = copy.deepcopy(tracks)
-                        found_count += 1
-                    else:
-                        break
-                if found_count == len(release['media']):
-                    logger.info(f"Starting Multi-disk download")
-                    downloads_complete = True
-                    for username in download_list:
-                        logger.info(f"Processing downloads for {username}")
-                        for file_dir in download_list[username]:
-                            logger.info(f"Adding download for: {file_dir}")
-                            track = download_list[username][file_dir]['tracks'][0]
-                            if not download_album(allowed_filetype, username, file_dir, download_list[username][file_dir]['directory'], search, retry_list, grab_list, artist_name, release, track):
-                                downloads_complete = False
-                                logger.info(f"Mulit disk download failed to enqueue")
-                                break
-                        if not downloads_complete:
-                            downloads = slskd.transfers.get_downloads(username)
-                            for user in download_list:
-                                for file_dir in download_list[user]:
-                                    directory = download_list[user][file_dir]['directory']
-                                    folder_data = []
-                                    for folder in grab_list:
-                                        if folder['name'] == directory['name']:
-                                            folder_data = folder
-                                            break
-                                    if not folder_data == []:
-                                        for cancel_directory in downloads["directories"]:
-                                            if cancel_directory["directory"] == directory["name"]:
-                                                cancel_and_delete(file_dir.split("\\")[-1], user, cancel_directory["files"])
-                                                grab_list.remove(folder_data)
-                                                ignored_users.append(user)
-                            break
-                            # Need to cancle any added downloads.
-                    if not downloads_complete:
-                        continue
-                    else:
-                        if delete_searches:
-                            slskd.searches.delete(search['id'])
-                        return True, artist_name
-            elif found:
-                track = all_tracks[0]
-                if download_album(allowed_filetype, username, file_dir, directory, search, retry_list, grab_list, artist_name, release, track):
-                    if delete_searches:
-                        slskd.searches.delete(search['id'])
-                    return True, artist_name
-                else:
-                    continue
+        found, username, directory, file_dir, file = check_for_match(dir_cache, search_cache, target, allowed_filetype)       
+        if found:
+            if download_album(target, username, file_dir, directory, retry_list, grab_list, file):
+                if delete_searches:
+                    slskd.searches.delete(search['id'])
+                return True, artist_name
+            else:
+                continue
 
     if delete_searches:
         slskd.searches.delete(search['id'])
@@ -414,43 +348,43 @@ def search_and_download(grab_list, target, retry_list):
     return False, artist_name
 
 
-def download_album(allowed_filetype, username, file_dir, directory, search, retry_list, grab_list, artist_name, release, track):
+def download_album(target, username, file_dir, directory, retry_list, grab_list,file):
 
-    if download_filtering: 
-        logger.info(f"Processing Download Filtering")
-        if use_extension_whitelist:
-            logger.info(f"Using extensions_whitelist: {use_extension_whitelist}")
-            whitelist = copy.deepcopy(extensions_whitelist)
-        else:
-            whitelist = []
-        whitelist.append(allowed_filetype.split(" ")[0])
-        unwanted = []
-        logger.info(f"Accepted extensions: {whitelist}")
-        for file in directory['files']:
-            match = False
-            for extension in whitelist:
-                if file['filename'].split(".")[-1].lower() == extension.lower():
-                    match = True
-            if not match:
-                unwanted.append(file['filename'])
-                logger.info(f"File: {file['filename']} is unwanted")
-        if len(unwanted) > 0:
-            temp = []
-            for file in directory['files']:
-                if file['filename'] not in unwanted:
-                    logger.info(f"File: {file['filename']} added to modified directory listing")
-                    temp.append(file)
-            directory['files'] = temp
+    #if download_filtering: 
+    #    logger.info(f"Processing Download Filtering")
+    #    if use_extension_whitelist:
+    #        logger.info(f"Using extensions_whitelist: {use_extension_whitelist}")
+    #        whitelist = copy.deepcopy(extensions_whitelist)
+    #    else:
+    #        whitelist = []
+    #    whitelist.append(allowed_filetype.split(" ")[0])
+    #    unwanted = []
+    #    logger.info(f"Accepted extensions: {whitelist}")
+    #    for file in directory['files']:
+    #        match = False
+    #        for extension in whitelist:
+    #            if file['filename'].split(".")[-1].lower() == extension.lower():
+    #                match = True
+    #        if not match:
+    #            unwanted.append(file['filename'])
+    #            logger.info(f"File: {file['filename']} is unwanted")
+    #    if len(unwanted) > 0:
+    #        temp = []
+    #        for file in directory['files']:
+    #            if file['filename'] not in unwanted:
+    #                logger.info(f"File: {file['filename']} added to modified directory listing")
+    #                temp.append(file)
+    #        directory['files'] = temp
 
+    directory['files'] = [file]
 
     for i in range(0,len(directory['files'])):
        directory['files'][i]['filename'] = file_dir + "\\" + directory['files'][i]['filename']
 
     folder_data = {
-        "artist_name": artist_name,
-        "release": release,
+        "artist_name": target['author']['authorName'],
+        "title": target['book']['title'],
         "dir": file_dir.split("\\")[-1],
-        "discnumber": track['mediumNumber'],
         "username": username,
         "directory": directory,
     }
@@ -649,34 +583,18 @@ def grab_most_wanted(download_targets):
 
         folder = artist_folder['dir']
 
-        if artist_folder['release']['mediumCount'] > 1:
-            for filename in os.listdir(folder):
-                album_name = lidarr.get_album(albumIds = artist_folder['release']['albumId'])['title']
+        
+        for filename in os.listdir(folder):
 
-                if filename.split(".")[-1] in allowed_filetypes:
-                    song = music_tag.load_file(os.path.join(folder,filename))
-                    if song is not None:
-                        song['artist'] = artist_name
-                        song['albumartist'] = artist_name
-                        song['album'] = album_name
-                        song['discnumber'] = artist_folder['discnumber']
-                        song.save()
+            if not os.path.exists(artist_name_sanitized):
+                os.mkdir(artist_name_sanitized)
 
-                new_dir = os.path.join(artist_name_sanitized,sanitize_folder_name(album_name))
+            if os.path.exists(os.path.join(folder,filename)) and not os.path.exists(os.path.join(artist_name_sanitized,filename)):
+                shutil.move(os.path.join(folder,filename),artist_name_sanitized)
 
-                if not os.path.exists(artist_name_sanitized):
-                    os.mkdir(artist_name_sanitized)
-                if not os.path.exists(new_dir):
-                    os.mkdir(new_dir)
+        if os.path.exists(folder):
+            shutil.rmtree(folder)
 
-                if os.path.exists(os.path.join(folder,filename)) and not os.path.exists(os.path.join(new_dir,filename)):
-                    shutil.move(os.path.join(folder,filename),new_dir)
-
-            if os.path.exists(folder):
-                shutil.rmtree(folder)
-
-        elif os.path.exists(folder):
-            shutil.move(folder,artist_name_sanitized)
 
     if lidarr_disable_sync:
         return failed_download
@@ -686,14 +604,14 @@ def grab_most_wanted(download_targets):
 
     for artist_folder in artist_folders:
         download_dir = os.path.join(lidarr_download_dir,artist_folder)
-        command = lidarr.post_command(name = 'DownloadedAlbumsScan', path = download_dir)
+        command = readarr.post_command(name = 'DownloadedBooksScan', path = download_dir)
         commands.append(command)
         logger.info(f"Starting Lidarr import for: {artist_folder} ID: {command['id']}")
 
     while True:
         completed_count = 0
         for task in commands:
-            current_task = lidarr.get_command(task['id'])
+            current_task = readarr.get_command(task['id'])
             if current_task['status'] == 'completed' or current_task['status'] == 'failed':
                 completed_count += 1
         if completed_count == len(commands):
@@ -701,7 +619,7 @@ def grab_most_wanted(download_targets):
         time.sleep(2)
 
     for task in commands:
-        current_task = lidarr.get_command(task['id'])
+        current_task = readarr.get_command(task['id'])
         try:
             logger.info(f"{current_task['commandName']} {current_task['message']} from: {current_task['body']['path']}")
 
@@ -769,14 +687,12 @@ def update_current_page(path: str, page: int) -> None:
 
 def get_books(missing: bool) -> list:
     try:
-        pprint.pprint(page_size)
         wanted = readarr.get_missing(page_size=page_size, sort_dir='ascending',sort_key='title')
     except ConnectionError as ex:
         logger.error(f"An error occurred when attempting to get records: {ex}")
         return []
 
     total_wanted = wanted['totalRecords']
-    pprint.pprint(wanted)
 
     wanted_records = []
     if search_type == 'all':
@@ -921,7 +837,6 @@ try:
         logger.error(f'An error occured: {ex}')
         logger.error('Exiting...')
         sys.exit(0)
-    pprint.pprint(wanted_books)
     download_targets = []
     if len(wanted_books) > 0:
         for book in wanted_books:
