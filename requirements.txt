@@ -1,2 +1,4 @@
 music-tag==0.4.3
 slskd-api==0.1.5
+mobi_header==0.0.4
+ebookmeta==1.2.11

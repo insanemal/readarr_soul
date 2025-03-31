@@ -14,7 +14,8 @@ import traceback
 import configparser
 import logging
 import copy
-
+from mobi_header import MobiHeader
+import ebookmeta
 import pprint
 
 from datetime import datetime
@@ -32,8 +33,6 @@ DEFAULT_LOGGING_CONF = {
 }
 
 def album_match(target, slskd_tracks, username, filetype):
-    counted = []
-    total_match = 0.0
 
     book_title = target['book']['title']
     artist_name = target['author']['authorName']
@@ -46,7 +45,7 @@ def album_match(target, slskd_tracks, username, filetype):
         book_filename = book_title+" - "+artist_name + "." + filetype.split(" ")[0]
         slskd_filename = slskd_track['filename']
 
-        logger.info(f"Checking ratio on {slskd_filename} vs {book_filename}")
+        logger.info(f"Checking ratio on {slskd_filename} vs wanted {book_filename}")
         #Try to match the ratio with the exact filenames
         ratio = difflib.SequenceMatcher(None, book_filename, slskd_filename).ratio()
 
@@ -71,9 +70,9 @@ def album_match(target, slskd_tracks, username, filetype):
     logger.info(f"Username is {username}")
     logger.info(f"Ratio is {best_match}")
 
-    if (current_match != None) and (username not in ignored_users) and (best_match > minimum_match_ratio):
+    if (current_match != None) and (username not in ignored_users) and (best_match >= minimum_match_ratio):
         logger.info(f"Found match from user: {username} for book! Track attributes: {filetype}")
-        logger.info(f"Average sequence match ratio: {total_match}")
+        logger.info(f"Average sequence match ratio: {best_match}")
         logger.info("SUCCESSFUL MATCH")
         logger.info("-------------------")
         return current_match
@@ -242,32 +241,6 @@ def check_for_match(dir_cache, search_cache, target, allowed_filetype):
             return False, "", {}, "", None
 
 def gen_allowed_filetypes(qprofile):
-#{'cutoff': 2,
-# 'cutoffFormatScore': 0,
-# 'formatItems': [],
-# 'id': 1,
-# 'items': [{'allowed': False,
-#            'items': [],
-#            'quality': {'id': 0, 'name': 'Unknown Text'}},
-#           {'allowed': False, 'items': [], 'quality': {'id': 1, 'name': 'PDF'}},
-#           {'allowed': True, 'items': [], 'quality': {'id': 2, 'name': 'MOBI'}},
-#           {'allowed': True, 'items': [], 'quality': {'id': 3, 'name': 'EPUB'}},
-#           {'allowed': True, 'items': [], 'quality': {'id': 4, 'name': 'AZW3'}},
-#           {'allowed': False,
-#            'items': [],
-#            'quality': {'id': 13, 'name': 'Unknown Audio'}},
-#           {'allowed': False,
-#            'items': [],
-#            'quality': {'id': 10, 'name': 'MP3'}},
-#           {'allowed': False,
-#            'items': [],
-#            'quality': {'id': 12, 'name': 'M4B'}},
-#           {'allowed': False,
-#            'items': [],
-#            'quality': {'id': 11, 'name': 'FLAC'}}],
-# 'minFormatScore': 0,
-# 'name': 'eBook',
-# 'upgradeAllowed': False}
     allowed_filetypes = []
     for item in qprofile['items']:
         if item['allowed']:
@@ -291,11 +264,6 @@ def search_and_download(grab_list, target, retry_list):
     if is_blacklisted(album_title):
        return False 
     query = book['authorTitle']
-
-    #if len(album_title) == 1:
-    #    query = '"' + artist_name + '"' + " " + album_title
-    #else:
-    #    query = '"' + artist_name + '"' + " " + album_title if config.getboolean('Search Settings', 'album_prepend_artist', fallback=False) else album_title
 
     logger.info(f"Searching album: {query}")
     search = slskd.searches.search_text(searchText = query,
@@ -377,6 +345,7 @@ def download_album(target, username, file_dir, directory, retry_list, grab_list,
     #        directory['files'] = temp
 
     directory['files'] = [file]
+    filename = file['filename']
 
     for i in range(0,len(directory['files'])):
        directory['files'][i]['filename'] = file_dir + "\\" + directory['files'][i]['filename']
@@ -384,9 +353,11 @@ def download_album(target, username, file_dir, directory, retry_list, grab_list,
     folder_data = {
         "artist_name": target['author']['authorName'],
         "title": target['book']['title'],
+        'bookId': target['book']['id'],
         "dir": file_dir.split("\\")[-1],
         "username": username,
         "directory": directory,
+        "filename": filename,
     }
     grab_list.append(folder_data)
 
@@ -432,7 +403,6 @@ def grab_most_wanted(download_targets):
     for target in download_targets:
         book = target['book']
         author = target['author']
-        qprofile = target['filetypes']
         artist_name = author['authorName']
 
         success = search_and_download(grab_list, target, retry_list)
@@ -582,9 +552,40 @@ def grab_most_wanted(download_targets):
         artist_name_sanitized = sanitize_folder_name(artist_name)
 
         folder = artist_folder['dir']
+        filename = artist_folder['filename']
 
-        
-        for filename in os.listdir(folder):
+        logger.info(f"Ensuring correct match on {filename}")
+        extention = filename.split('.')[-1]
+        match = False
+        if extention.lower() in ['azw3', 'mobi']:
+            try:
+                metadata = MobiHeader(os.path.join(folder,filename))
+                isbn = metadata.get_exth_value_by_id(104)
+                if isbn != None:
+                    book_to_test = readarr.lookup(term="isbn:"+str(isbn).strip())[0]['id']
+                    if book_to_test == artist_folder['bookId']:
+                        logger.info("Match of ISBN/Book ID")
+                        match = True
+                    else:
+                        match = False
+            except:
+                match = True
+        if extention.lower() == 'epub':
+            try:
+                metadata = ebookmeta.get_metadata(os.path.join(folder,filename))
+                title = metadata.title
+                diff = difflib.SequenceMatcher(None, title, artist_folder['title']).ratio()
+                if diff > 0.8:
+                    logger.info(f"Actual metadata diff: {diff}")
+                    match = True
+                else:
+                    match = False
+            except:
+                match = True
+        else:
+            match = True
+
+        if match:
 
             if not os.path.exists(artist_name_sanitized):
                 os.mkdir(artist_name_sanitized)
@@ -606,7 +607,7 @@ def grab_most_wanted(download_targets):
         download_dir = os.path.join(lidarr_download_dir,artist_folder)
         command = readarr.post_command(name = 'DownloadedBooksScan', path = download_dir)
         commands.append(command)
-        logger.info(f"Starting Lidarr import for: {artist_folder} ID: {command['id']}")
+        logger.info(f"Starting Readarr import for: {artist_folder} ID: {command['id']}")
 
     while True:
         completed_count = 0
@@ -753,7 +754,7 @@ failure_file_path = os.path.join(args.config_dir, "failure_list.txt")
 current_page_file_path = os.path.join(args.config_dir, ".current_page.txt")
 
 if not is_docker() and os.path.exists(lock_file_path):
-    logger.info(f"Soularr instance is already running.")
+    logger.info(f"readarr_soul instance is already running.")
     sys.exit(1)
 
 try:
@@ -807,15 +808,6 @@ try:
     page_size = config.getint('Search Settings', 'number_of_albums_to_grab', fallback=10)
     remove_wanted_on_failure = config.getboolean('Search Settings', 'remove_wanted_on_failure', fallback=True)
 
-    use_most_common_tracknum = config.getboolean('Release Settings', 'use_most_common_tracknum', fallback=True)
-    allow_multi_disc = config.getboolean('Release Settings', 'allow_multi_disc', fallback=True)
-
-    default_accepted_countries = "Europe,Japan,United Kingdom,United States,[Worldwide],Australia,Canada"
-    default_accepted_formats = "CD,Digital Media,Vinyl"
-    accepted_countries = config.get('Release Settings', 'accepted_countries', fallback=default_accepted_countries).split(",")
-    accepted_formats = config.get('Release Settings', 'accepted_formats', fallback=default_accepted_formats).split(",")
-
-
     download_filtering = config.getboolean('Download Settings', 'download_filtering', fallback=False)
     use_extension_whitelist = config.getboolean('Download Settings', 'use_extension_whitelist', fallback=False)
     extensions_whitelist = config.get('Download Settings', 'extensions_whitelist', fallback='txt,nfo,jpg').split(',')
@@ -825,8 +817,53 @@ try:
 
     slskd = slskd_api.SlskdClient(host=slskd_host_url, api_key=slskd_api_key, url_base=slskd_url_base)
     readarr = ReadarrAPI(readarr_host_url, readarr_api_key)
-#    lidarr = LidarrAPI(lidarr_host_url, lidarr_api_key)
     wanted_books = []
+#    book = readarr.lookup(term="isbn:9781444006728")
+#    for item in book:
+#        if 'book' in item:
+#            pprint.pprint(item['book'])
+#            replacement = item['book']
+#
+#    result = readarr.get_manual_import(folder='/mnt/ceph/media/downloads/slskd/failed_imports/Brandon Sanderson/')
+#    #pprint.pprint(result)
+#    import_files = []
+#    for file in result:
+#        print(file.keys())
+#        new_file = {}
+#        new_file['path'] = file['path']
+#        new_file['quality'] = file['quality']
+#        new_file['authorId'] = replacement['authorId']
+#        new_file['bookId'] = replacement['id']
+#        new_file['foreignEditionId'] = replacement['foreignEditionId']
+#        new_file['indexerFlags'] = 0
+#        new_file['disableReleaseSwitching'] = True
+#        import_files.append(new_file)
+#        pprint.pprint(new_file)
+#
+#
+#
+#
+##dict_keys(['path', 'name', 'size', 'author', 'book', 'foreignEditionId', 'quality', 'qualityWeight', 'indexerFlags', 'rejections', 'audioTags', 'additionalFile', 'replaceExistingFiles', 'disableReleaseSwitching', 'id'])
+#
+#    
+#
+## {"name":"ManualImport",
+##   "files":[{"path":"/books/Brandon Sanderson/Alcatraz versus the Knights of Crystallia (124)/Alcatraz versus the Knights of Crystallia - Brandon Sanderson.epub",
+##              "authorId":7,
+##              "bookId":133,
+##              "foreignEditionId":"21053571",
+##              "quality":{"quality":{"id":3,"name":"EPUB"},"revision":{"version":1,"real":0,"isRepack":false}},
+##              "indexerFlags":0,
+##              "disableReleaseSwitching":false}],
+##   "importMode":"auto",
+##   "replaceExistingFiles":false}
+#
+#    command = readarr.post_command(name = 'ManualImport', files=import_files, importMode='auto', replaceExistingFiles=False)
+#
+#    #result[0]['book'] = replacement
+#
+    #result = readarr.upd_manual_import(data=result)
+
 
     try:
         for source in search_sources:
@@ -857,7 +894,7 @@ try:
                 os.remove(lock_file_path)
             sys.exit(0)
         if failed == 0:
-            logger.info("Soularr finished. Exiting...")
+            logger.info("Readarr_Soul finished. Exiting...")
             slskd.transfers.remove_completed_downloads()
         else:
             if remove_wanted_on_failure:
