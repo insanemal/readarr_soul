@@ -13,4 +13,6 @@ WIP. Fork of Soularr to do the same with Readarr.
 
 It works. Mostly. Doesn't have a container built. So you're on your own!
 
+ALSO NOT AT ALL AFILLIATED WITH READARR. IF YOU HAVE PROBLEMS DON'T GO TO THEM FOR SUPPORT!
+
 https://discord.gg/mwX4dMSQGH
