@@ -1,4 +1,4 @@
-
+![banner](https://raw.githubusercontent.com/insanemal/readarr_soul/refs/heads/main/rsoul.png)
 
 <h1 align="center">R:soul</h1>
 <p align="center">
