@@ -1,5 +1,6 @@
+<p align="center">
 <img src="https://raw.githubusercontent.com/insanemal/readarr_soul/refs/heads/main/rsoul.png" align="center" width="592" height="691">
-
+</p>
 <h1 align="center">R:soul</h1>
 <p align="center">
   A Python script that connects Readarr with Soulseek!
