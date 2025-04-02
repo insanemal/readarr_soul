@@ -1,6 +1,7 @@
-
-
-<h1 align="center">Readarr_soul</h1>
+<p align="center">
+<img src="https://raw.githubusercontent.com/insanemal/readarr_soul/refs/heads/main/rsoul.png" align="center" width="592" height="691">
+</p>
+<h1 align="center">R:soul</h1>
 <p align="center">
   A Python script that connects Readarr with Soulseek!
 </p>
@@ -11,6 +12,8 @@
 
 WIP. Fork of Soularr to do the same with Readarr.
 
-IT DOES NOT WORK YET.
+It works. Mostly. Doesn't have a container built. So you're on your own!
 
+ALSO NOT AT ALL AFILLIATED WITH READARR. IF YOU HAVE PROBLEMS DON'T GO TO THEM FOR SUPPORT!
 
+https://discord.gg/mwX4dMSQGH
