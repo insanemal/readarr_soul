@@ -710,12 +710,13 @@ def grab_most_wanted(download_targets):
         book = target['book']
         author = target['author']
         artist_name = author['authorName']
+
         success = search_and_download(grab_list, target, retry_list)
 
         if not success:
             if remove_wanted_on_failure:
                 logger.error(f"Failed to grab album: {book['title']} for artist: {artist_name}."
-                            + ' Failed album removed from wanted list and added to "failure_list.txt"')
+                    + ' Failed album removed from wanted list and added to "failure_list.txt"')
                 book['monitored'] = False
                 edition = readarr.get_edition(book['id'])
                 readarr.upd_book(book=book, editions=edition)
@@ -723,10 +724,12 @@ def grab_most_wanted(download_targets):
                 current_datetime = datetime.now()
                 current_datetime_str = current_datetime.strftime("%d/%m/%Y %H:%M:%S")
                 failure_string = current_datetime_str + " - " + artist_name + ", " + book['title'] + "\n"
+
                 with open(failure_file_path, "a") as file:
                     file.write(failure_string)
             else:
                 logger.error(f"Failed to grab album: {book['title']} for artist: {artist_name}")
+
             failed_download += 1
 
     print_section_header("📥 DOWNLOAD MONITORING PHASE")
@@ -742,10 +745,11 @@ def grab_most_wanted(download_targets):
     while True:
         unfinished = 0
         total_remaining = 0
-        files_were_retried = False  # Track if any files were retried this iteration
+        files_were_retried = False
 
         for artist_folder in list(grab_list):
             username, dir = artist_folder['username'], artist_folder['directory']
+
             downloads = slskd.transfers.get_downloads(username)
 
             for directory in downloads["directories"]:
@@ -753,14 +757,12 @@ def grab_most_wanted(download_targets):
                     for file in directory['files']:
                         total_remaining += file['bytesRemaining']
 
-                    # Generate list of errored or failed downloads
                     errored_files = [file for file in directory["files"] if file["state"] in [
                         'Completed, Cancelled',
                         'Completed, TimedOut',
                         'Completed, Rejected',
                     ]]
 
-                    # Track files that need retry
                     files_retried_this_iteration = []
 
                     for file in directory["files"]:
@@ -777,32 +779,28 @@ def grab_most_wanted(download_targets):
                                     files_retried_this_iteration.append(file['filename'])
                                     files_were_retried = True
 
-                    # Generate list of downloads still pending
-                    # Include files that were just retried as still pending
                     pending_files = []
                     for file in directory["files"]:
-                        # If file was just retried, consider it pending regardless of current state
                         if file['filename'] in files_retried_this_iteration:
                             pending_files.append(file)
-                        # Otherwise, use normal pending logic
                         elif not ('Completed' in file["state"] and file["state"] not in ['Completed, Errored']):
                             pending_files.append(file)
 
-                    # If we have errored files (excluding retried ones), cancel and remove ALL files
                     if len(errored_files) > 0:
                         logger.error(f"FAILED: Username: {username} Directory: {dir['name']}")
                         cancel_and_delete(artist_folder['dir'], artist_folder['username'], directory["files"])
                         grab_list.remove(artist_folder)
+
                         for file in directory['files']:
                             if file['filename'] in retry_list[username]:
                                 del retry_list[username][file['filename']]
+
                         if len(retry_list[username]) <= 0:
                             del retry_list[username]
+
                     elif len(pending_files) > 0:
                         unfinished += 1
 
-        # If files were retried this iteration, wait a bit before checking again
-        # to allow the retry to take effect
         if files_were_retried:
             logger.info("Files were retried, waiting before next check...")
             time.sleep(5)
@@ -816,7 +814,7 @@ def grab_most_wanted(download_targets):
 
         if previous_total > total_remaining:
             previous_total = total_remaining
-            time_count = 0  # Reset timeout counter if progress is being made
+            time_count = 0
         else:
             time_count += 10
 
@@ -825,6 +823,7 @@ def grab_most_wanted(download_targets):
             for artist_folder in list(grab_list):
                 username, dir = artist_folder['username'], artist_folder['directory']
                 downloads = slskd.transfers.get_downloads(username)
+
                 for directory in downloads["directories"]:
                     if directory["directory"] == dir["name"]:
                         pending_files = [file for file in directory["files"] if not 'Completed' in file["state"]]
@@ -832,6 +831,7 @@ def grab_most_wanted(download_targets):
                             logger.error(f"Removing Stalled Download: Username: {username} Directory: {dir['name']}")
                             cancel_and_delete(artist_folder['dir'], artist_folder['username'], directory["files"])
                             grab_list.remove(artist_folder)
+
             logger.info("All tracks finished downloading!")
             time.sleep(5)
             break
@@ -840,170 +840,319 @@ def grab_most_wanted(download_targets):
 
     print_section_header("📚 METADATA VALIDATION & IMPORT PHASE")
 
+    # Check if sync is disabled first
+    if lidarr_disable_sync:
+        logger.warning("⚠️ Readarr sync is disabled in config. Skipping import phase.")
+        logger.info(f"Files downloaded but not imported. Check download directory: {slskd_download_dir}")
+        return failed_download
+
     os.chdir(slskd_download_dir)
+    logger.info(f"📁 Changed to download directory: {slskd_download_dir}")
 
     commands = []
     grab_list.sort(key=operator.itemgetter('artist_name'))
-    failed_imports = []  # Track files that fail metadata validation
+    failed_imports = []
 
     for artist_folder in grab_list:
-        artist_name = artist_folder['artist_name']
-        artist_name_sanitized = sanitize_folder_name(artist_name)
-        folder = artist_folder['dir']
-        filename = artist_folder['filename']
-        book_title = artist_folder['title']
-        book_id = artist_folder['bookId']
+        try:
+            artist_name = artist_folder['artist_name']
+            artist_name_sanitized = sanitize_folder_name(artist_name)
+            folder = artist_folder['dir']
+            filename = artist_folder['filename']
+            book_title = artist_folder['title']
+            book_id = artist_folder['bookId']
 
-        logger.info(f"Ensuring correct match on {filename}")
-        extension = filename.split('.')[-1]
-        match = False
+            logger.info(f"🔍 Processing file: {filename} for book: {book_title}")
+            logger.info(f"📂 Source folder: {folder}")
+            logger.info(f"👤 Target author folder: {artist_name_sanitized}")
 
-        if extension.lower() in ['azw3', 'mobi']:
-            try:
-                metadata = MobiHeader(os.path.join(folder, filename))
-                isbn = metadata.get_exth_value_by_id(104)
-                if isbn != None:
-                    book_to_test = readarr.lookup(term="isbn:"+str(isbn).strip())[0]['id']
-                    if book_to_test == book_id:
-                        logger.info("Match of ISBN/Book ID")
-                        match = True
+            # Check if source file exists
+            source_file_path = os.path.join(folder, filename)
+            if not os.path.exists(source_file_path):
+                logger.error(f"❌ Source file not found: {source_file_path}")
+                failed_imports.append((folder, filename, artist_name_sanitized, f"Source file not found: {source_file_path}"))
+                continue
+
+            logger.info(f"✅ Source file exists: {source_file_path}")
+
+            extension = filename.split('.')[-1].lower()
+            match = False
+
+            # Enhanced metadata validation with better error handling
+            if extension in ['azw3', 'mobi']:
+                try:
+                    logger.info(f"📖 Reading MOBI/AZW3 metadata from: {source_file_path}")
+                    metadata = MobiHeader(source_file_path)
+                    isbn = metadata.get_exth_value_by_id(104)
+
+                    if isbn is not None:
+                        logger.info(f"📚 Found ISBN in metadata: {isbn}")
+                        try:
+                            book_lookup = readarr.lookup(term=f"isbn:{str(isbn).strip()}")
+                            if book_lookup and len(book_lookup) > 0:
+                                book_to_test = book_lookup[0]['id']
+                                if book_to_test == book_id:
+                                    logger.info("✅ ISBN matches book ID - validation passed")
+                                    match = True
+                                else:
+                                    logger.warning(f"⚠️ ISBN mismatch: expected {book_id}, got {book_to_test}")
+                                    match = False
+                            else:
+                                logger.warning(f"⚠️ No book found for ISBN {isbn}, allowing import")
+                                match = True
+                        except Exception as e:
+                            logger.warning(f"⚠️ Error looking up ISBN {isbn}: {e}, allowing import")
+                            match = True
                     else:
-                        logger.warning(f"ISBN mismatch: expected {book_id}, got {book_to_test}")
-                        match = False
-                else:
-                    logger.warning("No ISBN found in metadata, allowing import")
+                        logger.info("ℹ️ No ISBN found in metadata, allowing import")
+                        match = True
+
+                except Exception as e:
+                    logger.error(f"❌ Error reading MOBI/AZW3 metadata: {e}")
+                    logger.info("ℹ️ Allowing import despite metadata error")
                     match = True
-            except Exception as e:
-                logger.warning(f"Error reading MOBI metadata: {e}, allowing import")
+
+            elif extension == 'epub':
+                try:
+                    logger.info(f"📖 Reading EPUB metadata from: {source_file_path}")
+                    metadata = ebookmeta.get_metadata(source_file_path)
+                    title = metadata.title
+
+                    if title:
+                        logger.info(f"📚 Found title in metadata: '{title}'")
+                        logger.info(f"🎯 Expected title: '{book_title}'")
+
+                        # Enhanced title matching
+                        diff = difflib.SequenceMatcher(None, title, book_title).ratio()
+                        logger.info(f"📊 Exact title match ratio: {diff:.3f}")
+
+                        normalized_title = re.sub(r'[^\w\s]', '', title.lower())
+                        normalized_book_title = re.sub(r'[^\w\s]', '', book_title.lower())
+                        normalized_diff = difflib.SequenceMatcher(None, normalized_title, normalized_book_title).ratio()
+                        logger.info(f"📊 Normalized title match ratio: {normalized_diff:.3f}")
+
+                        title_words = set(title.lower().split())
+                        book_title_words = set(book_title.lower().split())
+                        word_intersection = len(title_words.intersection(book_title_words))
+                        word_union = len(title_words.union(book_title_words))
+                        word_similarity = word_intersection / word_union if word_union > 0 else 0
+                        logger.info(f"📊 Word-based similarity: {word_similarity:.3f}")
+
+                        if diff > 0.8 or normalized_diff > 0.85 or word_similarity > 0.7:
+                            logger.info("✅ Title validation passed")
+                            match = True
+                        else:
+                            logger.warning(f"⚠️ Title validation failed - insufficient similarity")
+                            match = False
+                    else:
+                        logger.warning("⚠️ No title found in EPUB metadata, allowing import")
+                        match = True
+
+                except Exception as e:
+                    logger.error(f"❌ Error reading EPUB metadata: {e}")
+                    logger.info("ℹ️ Allowing import despite metadata error")
+                    match = True
+
+            else:
+                logger.info(f"ℹ️ File type {extension} - skipping metadata validation")
                 match = True
 
-        elif extension.lower() == 'epub':
-            try:
-                metadata = ebookmeta.get_metadata(os.path.join(folder, filename))
-                title = metadata.title
+            if match:
+                logger.info("✅ Metadata validation passed - proceeding with file organization")
 
-                # Enhanced title matching with multiple approaches
-                diff = difflib.SequenceMatcher(None, title, book_title).ratio()
-                logger.info(f"Exact title match ratio: {diff}")
+                # Create target directory
+                if not os.path.exists(artist_name_sanitized):
+                    logger.info(f"📁 Creating author directory: {artist_name_sanitized}")
+                    try:
+                        os.makedirs(artist_name_sanitized, exist_ok=True)
+                    except Exception as e:
+                        logger.error(f"❌ Failed to create directory {artist_name_sanitized}: {e}")
+                        failed_imports.append((folder, filename, artist_name_sanitized, f"Failed to create directory: {e}"))
+                        continue
 
-                # Try with normalized titles (remove punctuation differences)
-                normalized_title = re.sub(r'[^\w\s]', '', title.lower())
-                normalized_book_title = re.sub(r'[^\w\s]', '', book_title.lower())
-                normalized_diff = difflib.SequenceMatcher(None, normalized_title, normalized_book_title).ratio()
-                logger.info(f"Normalized title match ratio: {normalized_diff}")
+                # Move file to target directory
+                target_file_path = os.path.join(artist_name_sanitized, filename)
 
-                # Try partial matching for cases like "Essay" vs "Essays"
-                title_words = set(title.lower().split())
-                book_title_words = set(book_title.lower().split())
-                word_intersection = len(title_words.intersection(book_title_words))
-                word_union = len(title_words.union(book_title_words))
-                word_similarity = word_intersection / word_union if word_union > 0 else 0
-                logger.info(f"Word-based similarity: {word_similarity}")
+                if os.path.exists(source_file_path) and not os.path.exists(target_file_path):
+                    try:
+                        logger.info(f"📤 Moving file from {source_file_path} to {target_file_path}")
+                        shutil.move(source_file_path, target_file_path)
+                        logger.info("✅ File moved successfully")
 
-                # Accept if any of the matching methods is good enough
-                if diff > 0.8 or normalized_diff > 0.85 or word_similarity > 0.7:
-                    logger.info(f"Metadata title matches sufficiently (diff: {diff}, normalized: {normalized_diff}, word: {word_similarity})")
-                    match = True
+                        # Clean up source directory if empty
+                        try:
+                            if os.path.exists(folder) and not os.listdir(folder):
+                                logger.info(f"🗑️ Removing empty source directory: {folder}")
+                                shutil.rmtree(folder)
+                        except Exception as e:
+                            logger.warning(f"⚠️ Could not remove source directory {folder}: {e}")
+
+                    except Exception as e:
+                        logger.error(f"❌ Failed to move file: {e}")
+                        failed_imports.append((folder, filename, artist_name_sanitized, f"Failed to move file: {e}"))
+                        continue
                 else:
-                    logger.warning(f"Metadata title mismatch: '{title}' vs expected '{book_title}' (diff: {diff}, normalized: {normalized_diff}, word: {word_similarity})")
-                    match = False
+                    if not os.path.exists(source_file_path):
+                        logger.warning(f"⚠️ Source file no longer exists: {source_file_path}")
+                    if os.path.exists(target_file_path):
+                        logger.warning(f"⚠️ Target file already exists: {target_file_path}")
 
-            except Exception as e:
-                logger.warning(f"Error reading EPUB metadata: {e}, allowing import")
-                match = True
-        else:
-            # For other file types, allow import
-            match = True
+            else:
+                logger.warning(f"❌ Metadata validation failed for {filename}")
+                failed_imports.append((folder, filename, artist_name_sanitized, "Metadata validation failed"))
 
-        if match:
-            if not os.path.exists(artist_name_sanitized):
-                os.mkdir(artist_name_sanitized)
-
-            if os.path.exists(os.path.join(folder, filename)) and not os.path.exists(os.path.join(artist_name_sanitized, filename)):
-                shutil.move(os.path.join(folder, filename), artist_name_sanitized)
-
-            if os.path.exists(folder):
-                shutil.rmtree(folder)
-        else:
-            # Move failed matches to failed_imports
-            logger.warning(f"Metadata validation failed for {filename}, moving to failed_imports")
-            failed_imports.append((folder, filename, artist_name_sanitized))
+        except Exception as e:
+            logger.error(f"❌ Unexpected error processing {artist_folder.get('filename', 'unknown')}: {e}")
+            logger.error(f"🔍 Traceback: {traceback.format_exc()}")
+            failed_imports.append((
+                artist_folder.get('dir', 'unknown'),
+                artist_folder.get('filename', 'unknown'),
+                artist_folder.get('artist_name', 'unknown'),
+                f"Unexpected error: {e}"
+            ))
 
     # Handle failed imports
-    for folder, filename, artist_name_sanitized in failed_imports:
-        failed_imports_dir = "failed_imports"
-        if not os.path.exists(failed_imports_dir):
-            os.makedirs(failed_imports_dir)
+    if failed_imports:
+        logger.warning(f"⚠️ {len(failed_imports)} files failed validation/processing")
 
-        target_path = os.path.join(failed_imports_dir, artist_name_sanitized)
-        counter = 1
-        while os.path.exists(target_path):
-            target_path = os.path.join(failed_imports_dir, f"{artist_name_sanitized}_{counter}")
-            counter += 1
+        for folder, filename, artist_name_sanitized, error_reason in failed_imports:
+            logger.warning(f"❌ Failed: {filename} - Reason: {error_reason}")
 
-        os.makedirs(target_path)
-        if os.path.exists(os.path.join(folder, filename)):
-            shutil.move(os.path.join(folder, filename), target_path)
+            failed_imports_dir = "failed_imports"
+            try:
+                if not os.path.exists(failed_imports_dir):
+                    os.makedirs(failed_imports_dir)
+                    logger.info(f"📁 Created failed imports directory: {failed_imports_dir}")
 
-        if os.path.exists(folder):
-            shutil.rmtree(folder)
+                target_path = os.path.join(failed_imports_dir, artist_name_sanitized)
+                counter = 1
+                while os.path.exists(target_path):
+                    target_path = os.path.join(failed_imports_dir, f"{artist_name_sanitized}_{counter}")
+                    counter += 1
 
-        logger.info(f"Failed metadata validation moved to: {target_path}")
+                os.makedirs(target_path, exist_ok=True)
 
-    if lidarr_disable_sync:
-        return failed_download
+                source_file_path = os.path.join(folder, filename)
+                if os.path.exists(source_file_path):
+                    shutil.move(source_file_path, target_path)
+                    logger.info(f"📤 Moved failed file to: {target_path}")
 
-    artist_folders = next(os.walk('.'))[1]
-    artist_folders = [folder for folder in artist_folders if folder != 'failed_imports']
+                    if os.path.exists(folder) and not os.listdir(folder):
+                        shutil.rmtree(folder)
 
-    for artist_folder in artist_folders:
-        download_dir = os.path.join(lidarr_download_dir, artist_folder)
-        command = readarr.post_command(name = 'DownloadedBooksScan', path = download_dir)
-        commands.append(command)
-        logger.info(f"Starting Readarr import for: {artist_folder} ID: {command['id']}")
+            except Exception as e:
+                logger.error(f"❌ Error handling failed import for {filename}: {e}")
 
-    # Print import summary
-    print_import_summary(commands)
+    # Get list of successfully processed author folders
+    try:
+        artist_folders = next(os.walk('.'))[1]
+        artist_folders = [folder for folder in artist_folders if folder != 'failed_imports']
+        logger.info(f"📂 Found {len(artist_folders)} author folders to import: {artist_folders}")
+    except Exception as e:
+        logger.error(f"❌ Error listing directories: {e}")
+        artist_folders = []
 
-    while True:
-        completed_count = 0
-        for task in commands:
-            current_task = readarr.get_command(task['id'])
-            if current_task['status'] == 'completed' or current_task['status'] == 'failed':
-                completed_count += 1
+    # Start Readarr import process
+    if artist_folders:
+        logger.info("🚀 Starting Readarr import commands...")
 
-        if completed_count == len(commands):
-            break
+        for artist_folder in artist_folders:
+            try:
+                download_dir = os.path.join(lidarr_download_dir, artist_folder)
+                logger.info(f"📚 Importing from: {download_dir}")
 
-        time.sleep(2)
+                command = readarr.post_command(name='DownloadedBooksScan', path=download_dir)
+                commands.append(command)
+                logger.info(f"✅ Import command created - ID: {command['id']} for folder: {artist_folder}")
 
-    for task in commands:
-        current_task = readarr.get_command(task['id'])
-        try:
-            logger.info(f"{current_task['commandName']} {current_task['message']} from: {current_task['body']['path']}")
-            if "Failed" in current_task['message']:
-                move_failed_import(current_task['body']['path'])
-        except:
-            logger.error("Error printing readarr task message. Printing full unparsed message.")
-            logger.error(current_task)
+            except Exception as e:
+                logger.error(f"❌ Failed to create import command for {artist_folder}: {e}")
+                logger.error(f"🔍 Traceback: {traceback.format_exc()}")
+
+        if commands:
+            print_import_summary(commands)
+
+            # Monitor import progress
+            logger.info("⏳ Monitoring import progress...")
+            while True:
+                completed_count = 0
+
+                for task in commands:
+                    try:
+                        current_task = readarr.get_command(task['id'])
+                        if current_task['status'] in ['completed', 'failed']:
+                            completed_count += 1
+                    except Exception as e:
+                        logger.error(f"❌ Error checking task {task['id']}: {e}")
+                        completed_count += 1  # Count as completed to avoid infinite loop
+
+                if completed_count == len(commands):
+                    break
+
+                time.sleep(2)
+
+            # Report final results
+            logger.info("📊 Import Results:")
+            for task in commands:
+                try:
+                    current_task = readarr.get_command(task['id'])
+                    status = current_task.get('status', 'unknown')
+
+                    if 'body' in current_task and 'path' in current_task['body']:
+                        path = current_task['body']['path']
+                        folder_name = os.path.basename(path)
+                    else:
+                        folder_name = f"Task {task['id']}"
+
+                    if status == 'completed':
+                        logger.info(f"✅ {folder_name}: Import completed successfully")
+                    elif status == 'failed':
+                        logger.error(f"❌ {folder_name}: Import failed")
+                        if 'message' in current_task:
+                            logger.error(f"💬 Error message: {current_task['message']}")
+
+                        # Move failed import
+                        if 'body' in current_task and 'path' in current_task['body']:
+                            move_failed_import(current_task['body']['path'])
+                    else:
+                        logger.warning(f"⚠️ {folder_name}: Import status unknown - {status}")
+
+                except Exception as e:
+                    logger.error(f"❌ Error processing task result {task['id']}: {e}")
+                    logger.error(f"🔍 Raw task data: {task}")
+        else:
+            logger.warning("⚠️ No import commands were created successfully")
+    else:
+        logger.warning("⚠️ No author folders found to import")
 
     return failed_download
 
+
 def move_failed_import(src_path):
-    failed_imports_dir = "failed_imports"
-    if not os.path.exists(failed_imports_dir):
-        os.makedirs(failed_imports_dir)
+    """Move failed import to failed_imports directory with better error handling"""
+    try:
+        failed_imports_dir = "failed_imports"
+        if not os.path.exists(failed_imports_dir):
+            os.makedirs(failed_imports_dir)
+            logger.info(f"📁 Created failed imports directory: {failed_imports_dir}")
 
-    folder_name = os.path.basename(src_path)
-    target_path = os.path.join(failed_imports_dir, folder_name)
-    counter = 1
-    while os.path.exists(target_path):
-        target_path = os.path.join(failed_imports_dir, f"{folder_name}_{counter}")
-        counter += 1
+        folder_name = os.path.basename(src_path)
+        target_path = os.path.join(failed_imports_dir, folder_name)
+        counter = 1
 
-    if os.path.exists(folder_name):
-        shutil.move(folder_name, target_path)
-        logger.info(f"Failed import moved to: {target_path}")
+        while os.path.exists(target_path):
+            target_path = os.path.join(failed_imports_dir, f"{folder_name}_{counter}")
+            counter += 1
+
+        if os.path.exists(folder_name):
+            shutil.move(folder_name, target_path)
+            logger.info(f"📤 Failed import moved to: {target_path}")
+        else:
+            logger.warning(f"⚠️ Failed import source not found: {folder_name}")
+
+    except Exception as e:
+        logger.error(f"❌ Error moving failed import from {src_path}: {e}")
+        logger.error(f"🔍 Traceback: {traceback.format_exc()}")
 
 def is_docker():
     return os.getenv('IN_DOCKER') is not None
