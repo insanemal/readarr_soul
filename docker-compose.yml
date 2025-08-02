@@ -2,8 +2,8 @@ version: "3"
 services:
   soularr:
     restart: unless-stopped
-    container_name: soularr
-    hostname: soularr
+    container_name: rsoul
+    hostname: rsoul
     environment: 
       - PUID=1000
       - PGID=1000
@@ -16,4 +16,4 @@ services:
       - /path/to/slskd/downloads:/downloads
       #Select where you are storing your config file. Leave "/data" since thats where the script expects the config file to be
       - /path/to/config/dir:/data
-    image: mrusse08/soularr:latest
+    image: insanemal/rsoul:latest
