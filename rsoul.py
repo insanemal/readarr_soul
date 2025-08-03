@@ -187,9 +187,9 @@ def print_startup_banner():
     """Print a beautiful startup banner using full width"""
     banner_text = """
 ╔══════════════════════════════════════════════════════════════╗
-║                         READARR SOUL                         ║
+║                             rSoul                            ║
 ║                    Enhanced Book Downloader                  ║
-║                     Powered by Soulseek                     ║
+║                     Powered by Soulseek                      ║
 ╚══════════════════════════════════════════════════════════════╝
     """
 
@@ -869,7 +869,7 @@ def search_and_download(grab_list, target, retry_list):
         if username not in dir_cache:
             dir_cache[username] = {}
 
-        logger.info(f"Truncating directory count of user: {username}")
+        logger.debug(f"Truncating directory count of user: {username}")
 
         init_files = result['files']
         for file in init_files:
@@ -2087,7 +2087,7 @@ def get_books(missing: bool) -> list:
 
 # Let's allow some overrides to be passed to the script
 parser = argparse.ArgumentParser(
-    description="""Soularr reads all of your "wanted" albums/artists from Lidarr and downloads them using Slskd"""
+    description="""rSoul reads all of your "wanted" books/authors from Readarr and downloads them using Slskd"""
 )
 
 default_data_directory = os.getcwd()
@@ -2131,10 +2131,10 @@ try:
     else:
         if is_docker():
             logger.error('Config file does not exist! Please mount "/data" and place your "config.ini" file there. Alternatively, pass `--config-dir /directory/of/your/liking` as post arguments to store the config somewhere else.')
-            logger.error("See: https://github.com/mrusse/soularr/blob/main/config.ini for an example config file.")
+            logger.error("See: https://github.com/insanemal/readarr_soul/blob/main/config.ini for an example config file.")
         else:
             logger.error("Config file does not exist! Please place it in the working directory. Alternatively, pass `--config-dir /directory/of/your/liking` as post arguments to store the config somewhere else.")
-            logger.error("See: https://github.com/mrusse/soularr/blob/main/config.ini for an example config file.")
+            logger.error("See: https://github.com/insanemal/readarr_soul/blob/main/config.ini for an example config file.")
 
         if os.path.exists(lock_file_path) and not is_docker():
             os.remove(lock_file_path)
