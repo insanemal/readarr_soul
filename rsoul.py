@@ -202,8 +202,8 @@ def print_startup_banner():
     ))
 
 
-def print_search_summary(query, results_count, search_type="main", status="completed"):
-    """Print a formatted search summary using full terminal width"""
+def print_search_summary(query, results_count, search_type="main", status="completed", file_types=None):
+    """Print a formatted search summary with consistent column widths"""
     if search_type == "fallback":
         icon = "🔄"
         style = "yellow"
@@ -213,22 +213,37 @@ def print_search_summary(query, results_count, search_type="main", status="compl
         style = "blue"
         search_text = f"Main Search: {query}"
 
-    # Force full width by removing width constraints and using ratio
-    table = Table(show_header=False, box=box.ROUNDED, expand=True, width=console.width)
-    table.add_column("", style=style, ratio=1, min_width=20)
-    table.add_column("", style="white", ratio=4)
+    table = Table(
+        show_header=False,
+        box=box.ROUNDED,
+        expand=False
+    )
+
+    # FIXED: Use consistent column widths for all tables
+    table.add_column("", style=style, width=30, no_wrap=True)  # Changed from 32 to 30
+    table.add_column("", style="white", max_width=80, overflow="ellipsis")  # Added max_width constraint
 
     table.add_row(f"{icon} Query:", search_text)
 
+    if file_types:
+        table.add_row("📁 File Types:", file_types)
+
     if status == "searching":
         table.add_row("⏳ Status:", "Searching...")
+    elif status == "filetypes_searching":
+        table.add_row("⏳ Status:", "Searching across all file types...")
     else:
         table.add_row("📊 Results:", f"{results_count} files found")
+        if results_count == 0:
+            table.add_row("❌ Status:", "No matches found")
+        else:
+            table.add_row("✅ Status:", "Matches found, proceeding to download...")
 
     console.print(table)
 
+
 def print_directory_summary(username, directory_data):
-    """Print a clean summary of directory contents using full width"""
+    """Print directory summary with consistent column widths"""
     if isinstance(directory_data, list) and len(directory_data) > 0:
         dir_info = directory_data[0]
         file_count = dir_info.get('fileCount', 0)
@@ -240,10 +255,20 @@ def print_directory_summary(username, directory_data):
         file_count = 0
         dir_name = 'Unknown'
 
-    # Force full width
-    table = Table(show_header=False, box=box.SIMPLE, expand=True, width=console.width)
-    table.add_column("", style="cyan", ratio=1, min_width=20)
-    table.add_column("", style="white", ratio=4)
+    # Use the same column widths as other tables
+    label_width = 32
+    total_width = min(console.width - 4, 120)
+    content_width = total_width - label_width - 4
+
+    table = Table(
+        show_header=False,
+        box=box.SIMPLE,
+        expand=False,
+        width=total_width
+    )
+
+    table.add_column("", style="cyan", width=label_width, no_wrap=True)
+    table.add_column("", style="white", width=content_width, overflow="ellipsis")
 
     table.add_row("👤 User:", username)
     table.add_row("📁 Directory:", dir_name.split('\\')[-1])
@@ -252,36 +277,31 @@ def print_directory_summary(username, directory_data):
     console.print(table)
 
 def print_download_summary(downloads):
-    """Print a formatted table of downloads using full terminal width"""
+    """Print a formatted table of downloads with better width control"""
     if not downloads:
         console.print("❌ No downloads to process", style="red")
         return
 
-    # Use the detected terminal width directly
-    effective_width = TERMINAL_WIDTH
+    # Use console's actual width but cap it at reasonable maximum
+    max_width = min(console.width, 140)  # Cap at 140 characters
 
     table = Table(
         title="📥 Download Queue",
         box=box.ROUNDED,
-        expand=False,  # Changed to False to prevent overflow
-        width=effective_width,
+        expand=False,
+        width=max_width,
         show_lines=False
     )
 
-    # Calculate column widths based on effective width
-    user_width = max(12, int(effective_width * 0.12))
-    author_width = max(15, int(effective_width * 0.15))
-    title_width = max(20, int(effective_width * 0.18))
-    file_width = max(30, int(effective_width * 0.35))
-    ratio_width = 8
-    size_width = 10
+    # Set specific column widths that add up to less than max_width
+    table.add_column("👤 User", style="cyan", width=15, no_wrap=True)
+    table.add_column("👨💻 Author", style="green", width=20, no_wrap=True)
+    table.add_column("📚 Title", style="yellow", width=25, no_wrap=True)
+    table.add_column("📄 File", style="white", max_width=50, overflow="ellipsis")
+    table.add_column("📊 Ratio", style="magenta", width=8, justify="center", no_wrap=True)
+    table.add_column("💾 Size", style="blue", width=10, justify="right", no_wrap=True)
 
-    table.add_column("👤 User", style="cyan", width=user_width, no_wrap=True)
-    table.add_column("👨‍💻 Author", style="green", width=author_width, no_wrap=True)
-    table.add_column("📚 Title", style="yellow", width=title_width, no_wrap=True)
-    table.add_column("📄 File", style="white", width=file_width, no_wrap=False)  # Allow wrapping for long filenames
-    table.add_column("📊 Ratio", style="magenta", width=ratio_width, justify="center", no_wrap=True)
-    table.add_column("💾 Size", style="blue", width=size_width, justify="right", no_wrap=True)
+
 
     for item in downloads:
         username = str(item.get('username', ''))
@@ -321,34 +341,27 @@ def print_download_summary(downloads):
     console.print(table)
 
 def print_import_summary(commands, grab_list):
-    """Print a formatted table of import operations using full width"""
+    """Print a formatted table of import operations with controlled width"""
     if not commands:
         return
 
-    effective_width = TERMINAL_WIDTH
+    max_width = min(console.width, 120)  # Reasonable maximum
 
     table = Table(
         title="📚 Import Operations",
         box=box.ROUNDED,
         expand=False,
-        width=effective_width,
+        width=max_width,
         show_lines=True
     )
 
-    # Calculate proportional widths
-    author_width = max(15, int(effective_width * 0.25))
-    book_width = max(20, int(effective_width * 0.30))
-    files_width = 8
-    size_width = 12
-    id_width = 12
-    status_width = 10
-
-    table.add_column("👤 Author", style="green", width=author_width, no_wrap=True)
-    table.add_column("📚 Book", style="yellow", width=book_width, no_wrap=True)
-    table.add_column("📄 Files", style="white", width=files_width, justify="center", no_wrap=True)
-    table.add_column("💾 Total Size", style="blue", width=size_width, justify="right", no_wrap=True)
-    table.add_column("🆔 Command ID", style="cyan", width=id_width, justify="center", no_wrap=True)
-    table.add_column("📊 Status", style="white", width=status_width, justify="center", no_wrap=True)
+    # Use fixed and max widths instead of ratios
+    table.add_column("👤 Author", style="green", width=20, no_wrap=True)
+    table.add_column("📚 Book", style="yellow", max_width=35, overflow="ellipsis")
+    table.add_column("📄 Files", style="white", width=8, justify="center", no_wrap=True)
+    table.add_column("💾 Total Size", style="blue", width=12, justify="right", no_wrap=True)
+    table.add_column("🆔 Command ID", style="cyan", width=12, justify="center", no_wrap=True)
+    table.add_column("📊 Status", style="white", width=10, justify="center", no_wrap=True)
 
     for command in commands:
         if 'body' in command and 'path' in command['body']:
