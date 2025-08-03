@@ -277,13 +277,43 @@ def print_directory_summary(username, directory_data):
     console.print(table)
 
 def print_download_summary(downloads):
-    """Print a formatted table of downloads with better width control"""
+    """Print a formatted table of downloads with dynamic width adjustment"""
     if not downloads:
         console.print("❌ No downloads to process", style="red")
         return
 
+    # Calculate dynamic column widths based on content
+    usernames = [str(item.get('username', '')) for item in downloads]
+    authors = [str(item.get('author', '')) for item in downloads]
+    books = [str(item.get('book', '')) for item in downloads]
+    files = [str(item.get('filename', '')) for item in downloads]
+
+    # Calculate minimum required widths
+    user_width = max(len("👤 User"), max(len(u) for u in usernames) if usernames else 0) + 2
+    author_width = max(len("👨💻 Author"), max(len(a) for a in authors) if authors else 0) + 2
+    title_width = max(len("📚 Title"), max(len(b) for b in books) if books else 0) + 2
+    file_width = max(len("📄 File"), max(len(f) for f in files) if files else 0) + 2
+
     # Use console's actual width but cap it at reasonable maximum
-    max_width = min(console.width, 140)  # Cap at 140 characters
+    max_width = min(console.width, 160)
+
+    # Reserve space for other columns (ratio and size are fixed width)
+    fixed_width = 8 + 10 + 6  # ratio (8) + size (10) + padding (6)
+    available_width = max_width - fixed_width
+
+    # Distribute available width proportionally, but respect minimum widths
+    total_min_width = user_width + author_width + title_width + file_width
+
+    if total_min_width <= available_width:
+        # Use calculated widths as they fit
+        pass
+    else:
+        # Scale down proportionally while maintaining readability
+        scale_factor = available_width / total_min_width
+        user_width = max(8, int(user_width * scale_factor))
+        author_width = max(10, int(author_width * scale_factor))
+        title_width = max(10, int(title_width * scale_factor))
+        file_width = max(15, int(file_width * scale_factor))
 
     table = Table(
         title="📥 Download Queue",
@@ -293,15 +323,13 @@ def print_download_summary(downloads):
         show_lines=False
     )
 
-    # Set specific column widths that add up to less than max_width
-    table.add_column("👤 User", style="cyan", width=15, no_wrap=True)
-    table.add_column("👨💻 Author", style="green", width=20, no_wrap=True)
-    table.add_column("📚 Title", style="yellow", width=25, no_wrap=True)
-    table.add_column("📄 File", style="white", max_width=50, overflow="ellipsis")
+    # Add columns with calculated widths
+    table.add_column("👤 User", style="cyan", width=user_width, no_wrap=False, overflow="ellipsis")
+    table.add_column("👨💻 Author", style="green", width=author_width, no_wrap=False, overflow="ellipsis")
+    table.add_column("📚 Title", style="yellow", width=title_width, no_wrap=False, overflow="ellipsis")
+    table.add_column("📄 File", style="white", width=file_width, no_wrap=False, overflow="ellipsis")
     table.add_column("📊 Ratio", style="magenta", width=8, justify="center", no_wrap=True)
     table.add_column("💾 Size", style="blue", width=10, justify="right", no_wrap=True)
-
-
 
     for item in downloads:
         username = str(item.get('username', ''))
@@ -310,19 +338,13 @@ def print_download_summary(downloads):
         file = str(item.get('filename', ''))
         match_ratio = item.get('match_ratio', '')
 
-        # Truncate long text to fit columns
-        if len(username) > user_width - 2:
-            username = username[:user_width-5] + "..."
-        if len(author) > author_width - 2:
-            author = author[:author_width-5] + "..."
-        if len(book) > title_width - 2:
-            book = book[:title_width-5] + "..."
-
+        # Format match ratio
         if isinstance(match_ratio, float):
             match_ratio_str = f"{match_ratio:.3f}"
         else:
             match_ratio_str = str(match_ratio)
 
+        # Format file size
         size = item.get('size', 0)
         if isinstance(size, (int, float)):
             if size > 1e9:
@@ -345,7 +367,35 @@ def print_import_summary(commands, grab_list):
     if not commands:
         return
 
-    max_width = min(console.width, 120)  # Reasonable maximum
+    # Calculate dynamic column widths based on content
+    authors = []
+    books = []
+    for item in grab_list:
+        authors.append(item.get('artist_name', 'Unknown'))
+        books.append(item.get('title', 'Unknown'))
+
+    # Calculate minimum required widths
+    author_width = max(len("👤 Author"), max(len(a) for a in authors) if authors else 0) + 2
+    book_width = max(len("📚 Book"), max(len(b) for b in books) if books else 0) + 2
+
+    # Use console's actual width but cap it at reasonable maximum
+    max_width = min(console.width, 160)
+
+    # Reserve space for other columns (Files, Total Size, Command ID, Status)
+    fixed_width = 8 + 12 + 12 + 10 + 6  # Fixed widths + padding
+    available_width = max_width - fixed_width
+
+    # Distribute available width proportionally
+    total_min_width = author_width + book_width
+
+    if total_min_width <= available_width:
+        # Use calculated widths as they fit
+        pass
+    else:
+        # Scale down proportionally while maintaining readability
+        scale_factor = available_width / total_min_width
+        author_width = max(10, int(author_width * scale_factor))
+        book_width = max(15, int(book_width * scale_factor))
 
     table = Table(
         title="📚 Import Operations",
@@ -355,9 +405,9 @@ def print_import_summary(commands, grab_list):
         show_lines=True
     )
 
-    # Use fixed and max widths instead of ratios
-    table.add_column("👤 Author", style="green", width=20, no_wrap=True)
-    table.add_column("📚 Book", style="yellow", max_width=35, overflow="ellipsis")
+    # Add columns with calculated widths
+    table.add_column("👤 Author", style="green", width=author_width, no_wrap=False, overflow="ellipsis")
+    table.add_column("📚 Book", style="yellow", width=book_width, no_wrap=False, overflow="ellipsis")
     table.add_column("📄 Files", style="white", width=8, justify="center", no_wrap=True)
     table.add_column("💾 Total Size", style="blue", width=12, justify="right", no_wrap=True)
     table.add_column("🆔 Command ID", style="cyan", width=12, justify="center", no_wrap=True)
@@ -381,15 +431,9 @@ def print_import_summary(commands, grab_list):
             if item_dir == folder_name or item_author_sanitized == folder_name:
                 if author_name == "Unknown":
                     author_name = item.get('artist_name', 'Unknown')
-                book_title = item.get('title', 'Unknown')
+                    book_title = item.get('title', 'Unknown')
                 file_count += 1
                 total_size += item.get('size', 0)
-
-        # Truncate long text
-        if len(author_name) > author_width - 2:
-            author_name = author_name[:author_width-5] + "..."
-        if len(book_title) > book_width - 2:
-            book_title = book_title[:book_width-5] + "..."
 
         if total_size > 1e9:
             size_str = f"{total_size/1e9:.1f}GB"
@@ -452,13 +496,13 @@ def album_match(target, slskd_tracks, username, filetype):
 
     for slskd_track in filtered_tracks:
         slskd_filename = slskd_track['filename']
-        logger.info(f"Checking ratio on {slskd_filename} vs wanted {book_title} - {artist_name}.{filetype.split(' ')[0]}")
+        logger.debug(f"Checking ratio on {slskd_filename} vs. wanted {book_title} - {artist_name}.{filetype.split(' ')[0]}")
 
         # First, check if this looks like a very good match based on title containment
         title_bonus_value = 0.0  # Changed variable name to avoid confusion
         if title_contained_in_filename(book_title, slskd_filename):
             title_bonus_value = title_bonus  # Use the global config value
-            logger.info(f"Title containment bonus applied: +{title_bonus_value}")
+            logger.debug(f"Title containment bonus applied: +{title_bonus_value}")
 
         # Try multiple filename patterns for matching
         patterns_to_try = [
@@ -494,7 +538,7 @@ def album_match(target, slskd_tracks, username, filetype):
             best_match = final_ratio
             current_match = slskd_track
         else:
-            logger.info(f"Ratio: {max_ratio:.3f} + Title bonus: {title_bonus_value:.3f} = {final_ratio:.3f} (not better than current best: {best_match:.3f})")
+            logger.debug(f"Ratio: {max_ratio:.3f} + Title bonus: {title_bonus_value:.3f} = {final_ratio:.3f} (not better than current best: {best_match:.3f})")
 
     if (current_match != None) and (username not in ignored_users) and (best_match >= minimum_match_ratio):
         logger.info("SUCCESSFUL MATCH")
@@ -685,7 +729,7 @@ def check_for_match(dir_cache, search_cache, target, allowed_filetype):
                     if isinstance(directory, list):
                         # If it's a list, extract files from the first directory object and preserve name
                         if len(directory) > 0 and isinstance(directory[0], dict) and 'files' in directory[0]:
-                            logger.info("Converting list to dictionary format - extracting files from directory object")
+                            logger.debug("Converting list to dictionary format - extracting files from directory object")
                             # Preserve the original directory name for later matching
                             directory = {
                                 'files': directory[0]['files'],
@@ -875,7 +919,7 @@ def search_and_download(grab_list, target, retry_list):
                         # Handle both list and dict return types from SLSKD API
                         if isinstance(directory, list):
                             if len(directory) > 0 and isinstance(directory[0], dict) and 'files' in directory[0]:
-                                logger.info("Converting list to dictionary format - extracting files from directory object")
+                                logger.debug("Converting list to dictionary format - extracting files from directory object")
                                 directory = {
                                     'files': directory[0]['files'],
                                     'name': directory[0]['name']
@@ -934,7 +978,7 @@ def search_and_download(grab_list, target, retry_list):
     if not all_matches:
         if delete_searches:
             slskd.searches.delete(search['id'])
-        logger.error(f"🚨 Failed to grab album: {album_title} for artist: {artist_name}")
+        logger.warning(f"Failed to grab album: {album_title} for artist: {artist_name}")
         return False
 
     # Sort by match ratio (highest first) and download all good matches
@@ -1115,7 +1159,7 @@ def grab_most_wanted(download_targets):
 
         if not success:
             if remove_wanted_on_failure:
-                logger.error(f"Failed to grab album: {book['title']} for artist: {artist_name}."
+                logger.warning(f"Failed to grab album: {book['title']} for artist: {artist_name}."
                 + ' Failed album removed from wanted list and added to "failure_list.txt"')
                 book['monitored'] = False
                 edition = readarr.get_edition(book['id'])
@@ -1680,14 +1724,13 @@ def grab_most_wanted(download_targets):
                                     logger.info(f"✅ Imported: '{folder_name}/{file}'")
                         else:
                             # Log rejections with file details
-                            error_msg = f"❌ {folder_name}: Import failed - Readarr rejected all files"
                             if associated_files:
-                                logger.error(error_msg)
                                 for file in associated_files:
-                                    logger.error(f"❌ Rejected: '{folder_name}/{file}'")
+                                    logger.warning(f"⚠️ Rejected: '{folder_name}/{file}'")
                             else:
-                                logger.error(error_msg)
+                                logger.warning(f"⚠️ {folder_name}: Import failed - Readarr rejected all files")
                             failed_readarr_imports.append(folder_name)
+
 
                     elif status == 'failed':
                         file_info = ""
