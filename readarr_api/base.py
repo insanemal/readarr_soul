@@ -3,8 +3,8 @@ from typing import Any, Optional, Union
 
 from requests import Response
 
-from pyarr.exceptions import PyarrMissingArgument, PyarrRecordNotFound
-from pyarr.models.common import (
+from readarr_api.exceptions import PyarrMissingArgument, PyarrRecordNotFound
+from readarr_api.models.common import (
     PyarrBlocklistSortKey,
     PyarrDownloadClientSchema,
     PyarrHistorySortKey,
@@ -16,8 +16,8 @@ from pyarr.models.common import (
     PyarrNotificationSchema,
     PyarrSortDirection,
 )
-from pyarr.models.lidarr import LidarrImportListSchema
-from pyarr.types import JsonArray, JsonObject
+from readarr_api.models.lidarr import LidarrImportListSchema
+from readarr_api.types import JsonArray, JsonObject
 
 from .request_handler import RequestHandler
 
@@ -108,9 +108,7 @@ class BaseArrAPI(RequestHandler):
         return self._get("update", self.ver_uri)
 
     # GET /rootfolder
-    def get_root_folder(
-        self, id_: Optional[int] = None
-    ) -> Union[JsonArray, JsonObject]:
+    def get_root_folder(self, id_: Optional[int] = None) -> Union[JsonArray, JsonObject]:
         """Get list of root folders, free space and any unmappedFolders
 
         Args:
@@ -122,11 +120,7 @@ class BaseArrAPI(RequestHandler):
         return self._get(f"rootfolder{f'/{id_}' if id_ else ''}", self.ver_uri)
 
     # DELETE /rootfolder
-    def del_root_folder(
-        self, id_: int
-    ) -> Union[
-        Response, JsonObject, dict[Any, Any]
-    ]:  # sourcery skip: class-extract-method
+    def del_root_folder(self, id_: int) -> Union[Response, JsonObject, dict[Any, Any]]:  # sourcery skip: class-extract-method
         """Delete root folder with specified id
 
         Args:
@@ -171,7 +165,7 @@ class BaseArrAPI(RequestHandler):
         """Gets logs from instance
 
         Args:
-            page (Optional[int], optional): Specifiy page to return. Defaults to None.
+            page (Optional[int], optional): Specify page to return. Defaults to None.
             page_size (Optional[int], optional): Number of items per page. Defaults to None.
             sort_key (Optional[PyarrLogSortKey], optional): Field to sort by. Defaults to None.
             sort_dir (Optional[PyarrSortDirection], optional): Direction to sort. Defaults to None.
@@ -207,9 +201,7 @@ class BaseArrAPI(RequestHandler):
             params["filterKey"] = filter_key
             params["filterValue"] = filter_value
         elif filter_key or filter_value:
-            raise PyarrMissingArgument(
-                "filter_key and filter_value  must be used together"
-            )
+            raise PyarrMissingArgument("filter_key and filter_value  must be used together")
 
         return self._get("log", self.ver_uri, params)
 
@@ -305,9 +297,7 @@ class BaseArrAPI(RequestHandler):
         return self._delete(f"blocklist/{id_}", self.ver_uri)
 
     # DELETE /blocklist/bulk
-    def del_blocklist_bulk(
-        self, ids: list[int]
-    ) -> Union[Response, JsonObject, dict[Any, Any]]:
+    def del_blocklist_bulk(self, ids: list[int]) -> Union[Response, JsonObject, dict[Any, Any]]:
         """Delete blocked releases in bulk
 
         Args:
@@ -322,9 +312,7 @@ class BaseArrAPI(RequestHandler):
     # PROFILES
 
     # GET /qualityprofile/{id}
-    def get_quality_profile(
-        self, id_: Optional[int] = None
-    ) -> Union[JsonArray, dict[Any, Any]]:
+    def get_quality_profile(self, id_: Optional[int] = None) -> Union[JsonArray, dict[Any, Any]]:
         """Gets all quality profiles or specific one with id
 
         Args:
@@ -355,9 +343,7 @@ class BaseArrAPI(RequestHandler):
         return self._put(f"qualityprofile/{id_}", self.ver_uri, data=data)
 
     # DELETE /qualityprofile
-    def del_quality_profile(
-        self, id_: int
-    ) -> Union[Response, JsonObject, dict[Any, Any]]:
+    def del_quality_profile(self, id_: int) -> Union[Response, JsonObject, dict[Any, Any]]:
         """Removes a specific quality profile from the blocklist
 
         Args:
@@ -369,9 +355,7 @@ class BaseArrAPI(RequestHandler):
         return self._delete(f"qualityprofile/{id_}", self.ver_uri)
 
     # GET /qualitydefinition/{id}
-    def get_quality_definition(
-        self, id_: Optional[int] = None
-    ) -> Union[JsonArray, dict[Any, Any]]:
+    def get_quality_definition(self, id_: Optional[int] = None) -> Union[JsonArray, dict[Any, Any]]:
         """Gets all quality definitions or specific one by ID
 
         Args:
@@ -410,9 +394,7 @@ class BaseArrAPI(RequestHandler):
     # INDEXER
 
     # GET /indexer/schema
-    def get_indexer_schema(
-        self, implementation: Optional[PyarrIndexerSchema] = None
-    ) -> Union[JsonArray, JsonObject]:
+    def get_indexer_schema(self, implementation: Optional[PyarrIndexerSchema] = None) -> Union[JsonArray, JsonObject]:
         """Get possible indexer connections
 
         Args:
@@ -423,20 +405,14 @@ class BaseArrAPI(RequestHandler):
         """
         response: JsonArray = self._get("indexer/schema", self.ver_uri)
         if implementation:
-            if filter_response := [
-                item for item in response if item["implementation"] == implementation
-            ]:
+            if filter_response := [item for item in response if item["implementation"] == implementation]:
                 response = filter_response
             else:
-                raise PyarrRecordNotFound(
-                    f"A record with implementation {implementation} was not found"
-                )
+                raise PyarrRecordNotFound(f"A record with implementation {implementation} was not found")
         return response
 
     # GET /indexer/{id}
-    def get_indexer(
-        self, id_: Optional[int] = None
-    ) -> Union[JsonArray, dict[Any, Any]]:
+    def get_indexer(self, id_: Optional[int] = None) -> Union[JsonArray, dict[Any, Any]]:
         """Get all indexers or specific by id
 
         Args:
@@ -522,9 +498,7 @@ class BaseArrAPI(RequestHandler):
         return self._get(path, self.ver_uri)
 
     # GET /remotepathmapping
-    def get_remote_path_mapping(
-        self, id_: Optional[int] = None
-    ) -> Union[JsonArray, dict[Any, Any]]:
+    def get_remote_path_mapping(self, id_: Optional[int] = None) -> Union[JsonArray, dict[Any, Any]]:
         """Get remote path mappings for downloads Directory
 
         Args:
@@ -631,9 +605,7 @@ class BaseArrAPI(RequestHandler):
     # NOTIFICATIONS
 
     # GET /notification
-    def get_notification(
-        self, id_: Optional[int] = None
-    ) -> Union[JsonArray, dict[Any, Any]]:
+    def get_notification(self, id_: Optional[int] = None) -> Union[JsonArray, dict[Any, Any]]:
         """Get a list of all notification services, or single by ID
 
         Args:
@@ -646,9 +618,7 @@ class BaseArrAPI(RequestHandler):
         return self._get(f"notification{_path}", self.ver_uri)
 
     # GET /notification/schema
-    def get_notification_schema(
-        self, implementation: Optional[PyarrNotificationSchema] = None
-    ) -> Union[JsonArray, JsonObject]:
+    def get_notification_schema(self, implementation: Optional[PyarrNotificationSchema] = None) -> Union[JsonArray, JsonObject]:
         """Get possible notification connections
 
         Args:
@@ -659,14 +629,10 @@ class BaseArrAPI(RequestHandler):
         """
         response: JsonArray = self._get("notification/schema", self.ver_uri)
         if implementation:
-            if filter_response := [
-                item for item in response if item["implementation"] == implementation
-            ]:
+            if filter_response := [item for item in response if item["implementation"] == implementation]:
                 response = filter_response
             else:
-                raise PyarrRecordNotFound(
-                    f"A record with implementation {implementation} was not found"
-                )
+                raise PyarrRecordNotFound(f"A record with implementation {implementation} was not found")
         return response
 
     # POST /notification
@@ -782,9 +748,7 @@ class BaseArrAPI(RequestHandler):
     # DOWNLOAD CLIENT
 
     # GET /downloadclient/{id}
-    def get_download_client(
-        self, id_: Optional[int] = None
-    ) -> Union[JsonArray, JsonObject]:
+    def get_download_client(self, id_: Optional[int] = None) -> Union[JsonArray, JsonObject]:
         """Get a list of all the download clients or a single client by its database id
 
         Args:
@@ -797,9 +761,7 @@ class BaseArrAPI(RequestHandler):
         return self._get(path, self.ver_uri)
 
     # GET /downloadclient/schema
-    def get_download_client_schema(
-        self, implementation: Optional[PyarrDownloadClientSchema] = None
-    ) -> JsonArray:
+    def get_download_client_schema(self, implementation: Optional[PyarrDownloadClientSchema] = None) -> JsonArray:
         """Gets the schemas for the different download Clients
 
         Args:
@@ -810,14 +772,10 @@ class BaseArrAPI(RequestHandler):
         """
         response: JsonArray = self._get("downloadclient/schema", self.ver_uri)
         if implementation:
-            if filter_response := [
-                item for item in response if item["implementation"] == implementation
-            ]:
+            if filter_response := [item for item in response if item["implementation"] == implementation]:
                 response = filter_response
             else:
-                raise PyarrRecordNotFound(
-                    f"A record with implementation {implementation} was not found"
-                )
+                raise PyarrRecordNotFound(f"A record with implementation {implementation} was not found")
         return response
 
     # POST /downloadclient/
@@ -849,9 +807,7 @@ class BaseArrAPI(RequestHandler):
         return self._put(f"downloadclient/{id_}", self.ver_uri, data=data)
 
     # DELETE /downloadclient/{id}
-    def del_download_client(
-        self, id_: int
-    ) -> Union[Response, JsonObject, dict[Any, Any]]:
+    def del_download_client(self, id_: int) -> Union[Response, JsonObject, dict[Any, Any]]:
         """Delete a download client by database id
 
         Args:
@@ -879,9 +835,7 @@ class BaseArrAPI(RequestHandler):
 
     def get_import_list_schema(
         self,
-        implementation: Optional[
-            Union[PyarrImportListSchema, LidarrImportListSchema]
-        ] = None,
+        implementation: Optional[Union[PyarrImportListSchema, LidarrImportListSchema]] = None,
     ) -> JsonArray:
         """Gets the schemas for the different import list sources
 
@@ -893,14 +847,10 @@ class BaseArrAPI(RequestHandler):
         """
         response: JsonArray = self._get("importlist/schema", self.ver_uri)
         if implementation:
-            if filter_response := [
-                item for item in response if item["implementation"] == implementation
-            ]:
+            if filter_response := [item for item in response if item["implementation"] == implementation]:
                 response = filter_response
             else:
-                raise PyarrRecordNotFound(
-                    f"A record with implementation {implementation} was not found"
-                )
+                raise PyarrRecordNotFound(f"A record with implementation {implementation} was not found")
         return response
 
     # POST /importlist/
@@ -981,9 +931,7 @@ class BaseArrAPI(RequestHandler):
 
     # GET /language/{id}
     # TODO: update notes and tests for Sonarr once resolved
-    def get_language(
-        self, id_: Optional[int] = None
-    ) -> Union[JsonArray, dict[Any, Any]]:
+    def get_language(self, id_: Optional[int] = None) -> Union[JsonArray, dict[Any, Any]]:
         """Gets all language profiles or specific one with id
 
         Note:

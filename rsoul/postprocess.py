@@ -65,14 +65,14 @@ def process_imports(ctx: Any, grab_list: list):
     grab_list.sort(key=operator.itemgetter("author_name"))
     failed_imports = []
 
-    for artist_folder in grab_list:
+    for book_download in grab_list:
         try:
-            author_name = artist_folder["author_name"]
+            author_name = book_download["author_name"]
             author_name_sanitized = sanitize_folder_name(author_name)
-            folder = artist_folder["dir"]
-            filename = artist_folder["filename"]
-            book_title = artist_folder["title"]
-            book_id = artist_folder["bookId"]
+            folder = book_download["dir"]
+            filename = book_download["filename"]
+            book_title = book_download["title"]
+            book_id = book_download["bookId"]
 
             logger.info(f"🔍 Processing file: {filename} for book: {book_title}")
             logger.info(f"📂 Source folder: {folder}")
@@ -214,9 +214,9 @@ def process_imports(ctx: Any, grab_list: list):
                 failed_imports.append((folder, filename, author_name_sanitized, "Metadata validation failed"))
 
         except Exception as e:
-            logger.error(f"❌ Unexpected error processing {artist_folder.get('filename', 'unknown')}: {e}")
+            logger.error(f"❌ Unexpected error processing {book_download.get('filename', 'unknown')}: {e}")
             logger.error(f"🔍 Traceback: {traceback.format_exc()}")
-            failed_imports.append((artist_folder.get("dir", "unknown"), artist_folder.get("filename", "unknown"), artist_folder.get("author_name", "unknown"), f"Unexpected error: {e}"))
+            failed_imports.append((book_download.get("dir", "unknown"), book_download.get("filename", "unknown"), book_download.get("author_name", "unknown"), f"Unexpected error: {e}"))
 
     # Handle failed imports
     if failed_imports:
@@ -252,28 +252,28 @@ def process_imports(ctx: Any, grab_list: list):
 
     # Get list of successfully processed author folders
     try:
-        artist_folders = next(os.walk("."))[1]
-        artist_folders = [folder for folder in artist_folders if folder != "failed_imports"]
-        logger.info(f"📂 Found {len(artist_folders)} author folders to import: {artist_folders}")
+        author_folders = next(os.walk("."))[1]
+        author_folders = [folder for folder in author_folders if folder != "failed_imports"]
+        logger.info(f"📂 Found {len(author_folders)} author folders to import: {author_folders}")
     except Exception as e:
         logger.error(f"❌ Error listing directories: {e}")
-        artist_folders = []
+        author_folders = []
 
     # Start Readarr import process
-    if artist_folders:
+    if author_folders:
         logger.info("🚀 Starting Readarr import commands...")
 
-        for artist_folder in artist_folders:
+        for author_folder in author_folders:
             try:
-                download_dir = os.path.join(readarr_download_dir, artist_folder)
+                download_dir = os.path.join(readarr_download_dir, author_folder)
                 logger.info(f"📚 Importing from: {download_dir}")
 
                 command = readarr.post_command(name="DownloadedBooksScan", path=download_dir)
                 commands.append(command)
-                logger.info(f"✅ Import command created - ID: {command['id']} for folder: {artist_folder}")
+                logger.info(f"✅ Import command created - ID: {command['id']} for folder: {author_folder}")
 
             except Exception as e:
-                logger.error(f"❌ Failed to create import command for {artist_folder}: {e}")
+                logger.error(f"❌ Failed to create import command for {author_folder}: {e}")
                 logger.error(f"🔍 Traceback: {traceback.format_exc()}")
 
         if commands:

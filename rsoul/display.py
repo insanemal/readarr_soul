@@ -54,13 +54,13 @@ class CustomRichHandler(RichHandler):
         elif record.levelno >= logging.INFO:
             if "SUCCESSFUL MATCH" in str(record.msg):
                 record.msg = f"✅ {record.msg}"
-            elif "Searching album" in str(record.msg):
+            elif "Searching book" in str(record.msg):
                 record.msg = f"🔍 {record.msg}"
             elif "Starting Readarr import" in str(record.msg):
                 record.msg = f"📚 {record.msg}"
             elif "Downloads added" in str(record.msg):
                 record.msg = f"⬇️  {record.msg}"
-            elif "All tracks finished downloading" in str(record.msg):
+            elif "All files finished downloading" in str(record.msg):
                 record.msg = f"🎉 {record.msg}"
             else:
                 record.msg = f"ℹ️  {record.msg}"

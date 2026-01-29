@@ -9,9 +9,7 @@ import traceback
 from rich.console import Console
 
 # Import from rsoul package
-# Add ./pyarr/ to path for legacy compatibility
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "pyarr"))
-from pyarr import ReadarrAPI
+from readarr_api import ReadarrAPI
 import slskd_api
 
 from rsoul.config import Context, setup_logging

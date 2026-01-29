@@ -2,7 +2,7 @@ from typing import Any, Optional, Union
 
 from requests import Response
 
-from pyarr.types import JsonArray, JsonObject
+from readarr_api.types import JsonArray, JsonObject
 
 from .base import BaseArrAPI
 from .exceptions import PyarrMissingArgument, PyarrMissingProfile
@@ -260,9 +260,7 @@ class ReadarrAPI(BaseArrAPI):
         return self._post("qualityprofile", self.ver_uri, data=data)
 
     # GET /metadataprofile/{id}
-    def get_metadata_profile(
-        self, id_: Optional[int] = None
-    ) -> Union[JsonArray, dict[Any, Any]]:
+    def get_metadata_profile(self, id_: Optional[int] = None) -> Union[JsonArray, dict[Any, Any]]:
         """Gets all metadata profiles or specific one with ID
 
         Args:
@@ -330,9 +328,7 @@ class ReadarrAPI(BaseArrAPI):
         return self._delete(f"metadataprofile/{id_}", self.ver_uri)
 
     # GET /delayprofile/{id}
-    def get_delay_profile(
-        self, id_: Optional[int] = None
-    ) -> Union[JsonArray, JsonObject]:
+    def get_delay_profile(self, id_: Optional[int] = None) -> Union[JsonArray, JsonObject]:
         """Gets all delay profiles or specific one with ID
 
         Args:
@@ -345,9 +341,7 @@ class ReadarrAPI(BaseArrAPI):
         return self._get(path, self.ver_uri)
 
     # GET /releaseprofile/{id}
-    def get_release_profile(
-        self, id_: Optional[int] = None
-    ) -> Union[JsonArray, JsonObject]:
+    def get_release_profile(self, id_: Optional[int] = None) -> Union[JsonArray, JsonObject]:
         """Gets all release profiles or specific one with ID
 
         Args:
@@ -406,16 +400,12 @@ class ReadarrAPI(BaseArrAPI):
             try:
                 quality_profile_id = self.get_quality_profile()[0]["id"]
             except IndexError as exception:
-                raise PyarrMissingProfile(
-                    "There is no Quality Profile setup"
-                ) from exception
+                raise PyarrMissingProfile("There is no Quality Profile setup") from exception
         if metadata_profile_id is None:
             try:
                 metadata_profile_id = self.get_metadata_profile()[0]["id"]
             except IndexError as exception:
-                raise PyarrMissingProfile(
-                    "There is no Metadata Profile setup"
-                ) from exception
+                raise PyarrMissingProfile("There is no Metadata Profile setup") from exception
 
         book["author"]["rootFolderPath"] = root_dir
         book["author"]["metadataProfileId"] = metadata_profile_id
@@ -453,9 +443,7 @@ class ReadarrAPI(BaseArrAPI):
         return self._put("book", self.ver_uri, data=book)
 
     # PUT /book/monitor
-    def upd_book_monitor(
-        self, book_ids: list[int], monitored: bool = True
-    ) -> JsonArray:
+    def upd_book_monitor(self, book_ids: list[int], monitored: bool = True) -> JsonArray:
         """Update book monitored status
 
         Args:
@@ -534,22 +522,18 @@ class ReadarrAPI(BaseArrAPI):
             author_search_for_missing_books (bool, optional): Search for any missing books by the author. Defaults to False.
 
         Returns:
-            JsonObject: Dictonary of added record
+            JsonObject: Dictionary of added record
         """
         if quality_profile_id is None:
             try:
                 quality_profile_id = self.get_quality_profile()[0]["id"]
             except IndexError as exception:
-                raise PyarrMissingProfile(
-                    "There is no Quality Profile setup"
-                ) from exception
+                raise PyarrMissingProfile("There is no Quality Profile setup") from exception
         if metadata_profile_id is None:
             try:
                 metadata_profile_id = self.get_metadata_profile()[0]["id"]
             except IndexError as exception:
-                raise PyarrMissingProfile(
-                    "There is no Metadata Profile setup"
-                ) from exception
+                raise PyarrMissingProfile("There is no Metadata Profile setup") from exception
         author["metadataProfileId"] = metadata_profile_id
         author["qualityProfileId"] = quality_profile_id
         author["rootFolderPath"] = root_dir
@@ -761,7 +745,7 @@ class ReadarrAPI(BaseArrAPI):
             minimumCustomFormatScore (int, optional): set when using `bypassIfAboveCustomFormatScore`. Defaults to 0.
 
         Returns:
-            JsonObject: Dictonary with added item
+            JsonObject: Dictionary with added item
         """
         data = {
             "enableUsenet": True,

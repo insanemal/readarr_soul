@@ -2,7 +2,7 @@ from typing import Any, Optional, Union
 
 from requests import Response
 
-from pyarr.types import JsonArray, JsonObject
+from readarr_api.types import JsonArray, JsonObject
 
 from .base import BaseArrAPI
 from .exceptions import PyarrMissingArgument, PyarrMissingProfile
@@ -47,7 +47,7 @@ class LidarrAPI(BaseArrAPI):
             default_tags (list[int]): List of default tag IDs
 
         Returns:
-            JsonObject: Dictonary with added record
+            JsonObject: Dictionary with added record
         """
         folder_json = {
             "defaultTags": default_tags or [],
@@ -141,23 +141,19 @@ class LidarrAPI(BaseArrAPI):
             artist_search_for_missing_albums (bool, optional): Search for missing albums by this artist. Defaults to False.
 
         Returns:
-            JsonObject: Dictonary with added record
+            JsonObject: Dictionary with added record
         """
 
         if quality_profile_id is None:
             try:
                 quality_profile_id = self.get_quality_profile()[0]["id"]
             except IndexError as exception:
-                raise PyarrMissingProfile(
-                    "There is no Quality Profile setup"
-                ) from exception
+                raise PyarrMissingProfile("There is no Quality Profile setup") from exception
         if metadata_profile_id is None:
             try:
                 metadata_profile_id = self.get_metadata_profile()[0]["id"]
             except IndexError as exception:
-                raise PyarrMissingProfile(
-                    "There is no Metadata Profile setup"
-                ) from exception
+                raise PyarrMissingProfile("There is no Metadata Profile setup") from exception
 
         artist["id"] = 0
         artist["metadataProfileId"] = metadata_profile_id
@@ -260,16 +256,12 @@ class LidarrAPI(BaseArrAPI):
             try:
                 quality_profile_id = self.get_quality_profile()[0]["id"]
             except IndexError as exception:
-                raise PyarrMissingProfile(
-                    "There is no Quality Profile setup"
-                ) from exception
+                raise PyarrMissingProfile("There is no Quality Profile setup") from exception
         if metadata_profile_id is None:
             try:
                 metadata_profile_id = self.get_metadata_profile()[0]["id"]
             except IndexError as exception:
-                raise PyarrMissingProfile(
-                    "There is no Metadata Profile setup"
-                ) from exception
+                raise PyarrMissingProfile("There is no Metadata Profile setup") from exception
 
         album["artist"]["metadataProfileId"] = metadata_profile_id
         album["artist"]["qualityProfileId"] = quality_profile_id
@@ -311,9 +303,7 @@ class LidarrAPI(BaseArrAPI):
         return self._delete(f"album/{id_}", self.ver_uri)
 
     # POST /command
-    def post_command(
-        self, name: LidarrCommand, **kwargs: Optional[dict[str, Union[int, list[int]]]]
-    ) -> JsonObject:
+    def post_command(self, name: LidarrCommand, **kwargs: Optional[dict[str, Union[int, list[int]]]]) -> JsonObject:
         """Send a command to Lidarr
 
         Args:
@@ -416,15 +406,8 @@ class LidarrAPI(BaseArrAPI):
         if isinstance(trackIds, list):
             params["trackIds"] = trackIds
 
-        if (
-            artistId is None
-            and albumId is None
-            and albumReleaseId is None
-            and trackIds is None
-        ):
-            raise PyarrMissingArgument(
-                "One of artistId, albumId, albumReleaseId or trackIds must be provided"
-            )
+        if artistId is None and albumId is None and albumReleaseId is None and trackIds is None:
+            raise PyarrMissingArgument("One of artistId, albumId, albumReleaseId or trackIds must be provided")
 
         return self._get(
             f"track{f'/{trackIds}' if isinstance(trackIds, int) else ''}",
@@ -454,15 +437,8 @@ class LidarrAPI(BaseArrAPI):
         Returns:
             JsonArray: List of dictionaries with items
         """
-        if (
-            artistId is None
-            and albumId is None
-            and trackFileIds is None
-            and unmapped is None
-        ):
-            raise PyarrMissingArgument(
-                "artistId, albumId, trackFileIds or unmapped must be provided"
-            )
+        if artistId is None and albumId is None and trackFileIds is None and unmapped is None:
+            raise PyarrMissingArgument("artistId, albumId, trackFileIds or unmapped must be provided")
         params: dict[str, Any] = {}
         if artistId is not None:
             params["artistId"] = artistId
@@ -494,9 +470,7 @@ class LidarrAPI(BaseArrAPI):
         return self._put("trackfile", self.ver_uri, data=data)
 
     # DEL /trackfile/{ids_}
-    def delete_track_file(
-        self, ids_: Union[int, list[int]]
-    ) -> Union[Response, JsonObject, dict[Any, Any]]:
+    def delete_track_file(self, ids_: Union[int, list[int]]) -> Union[Response, JsonObject, dict[Any, Any]]:
         """Delete track files. Use integer for one file or list for mass deletion.
 
         Args:
@@ -642,9 +616,7 @@ class LidarrAPI(BaseArrAPI):
         return self._get("queue/details", self.ver_uri, params=params)
 
     # GET /release
-    def get_release(
-        self, artistId: Optional[int] = None, albumId: Optional[int] = None
-    ) -> JsonArray:
+    def get_release(self, artistId: Optional[int] = None, albumId: Optional[int] = None) -> JsonArray:
         """Search indexers for specified fields.
 
         Args:
@@ -730,14 +702,12 @@ class LidarrAPI(BaseArrAPI):
         return self._put("manualimport", self.ver_uri, data=data)
 
     # GET /retag
-    def get_retag(
-        self, artistId: Optional[int] = None, albumId: Optional[int] = None
-    ) -> JsonArray:
+    def get_retag(self, artistId: Optional[int] = None, albumId: Optional[int] = None) -> JsonArray:
         """Get Retag
 
         Args:
             artistId (int): ID for the  artist
-            albumId Optional[int], optional): ID foir the album. Defaults to None.
+            albumId Optional[int], optional): ID for the album. Defaults to None.
 
         Returns:
             JsonArray: List of dictionaries with items

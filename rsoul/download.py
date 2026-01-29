@@ -65,7 +65,7 @@ def slskd_download_status(slskd_client, downloads):
 
 def downloads_all_done(downloads):
     """
-    Checks the status of all the files in an album and returns a flag if all done as well
+    Checks the status of all the files in a book and returns a flag if all done as well
     as returning a list of files with errors to check and how many files are in "Queued, Remotely"
     """
     all_done = True

@@ -31,7 +31,7 @@ EpisodeSearch:
     Searches for all episondes, or specific ones in supplied list
 
     Args:
-        episodeIds (lsit[int], optional): One or more episodeIds in a list
+        episodeIds (list[int], optional): One or more episodeIds in a list
 
 missingEpisodeSearch:
     Searches for any missing episodes

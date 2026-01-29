@@ -120,17 +120,17 @@ def search_and_download(ctx, grab_list, target, retry_list):
     book = target["book"]
     author = target["author"]
     qprofile = target["filetypes"]
-    artist_name = author["authorName"]
-    album_title = book["title"]
+    author_name = author["authorName"]
+    book_title = book["title"]
     allowed_filetypes = gen_allowed_filetypes(qprofile)
 
-    if is_blacklisted(ctx, album_title):
+    if is_blacklisted(ctx, book_title):
         return False
 
     delete_searches = ctx.config.getboolean("Slskd", "delete_searches", fallback=True)
 
     # Construct query with proper " - " separator between author and title
-    query = f"{artist_name} - {album_title}"
+    query = f"{author_name} - {book_title}"
     print_search_summary(query, 0, "main", "searching")  # Show searching status
 
     # Perform initial search
@@ -154,10 +154,10 @@ def search_and_download(ctx, grab_list, target, retry_list):
     print_search_summary(query, len(search_results), "main", "completed")  # Show final results
 
     # If no results and title contains ":", try searching with main title only
-    if len(search_results) == 0 and ":" in album_title:
+    if len(search_results) == 0 and ":" in book_title:
         # Extract main title (everything before ":")
-        main_title = album_title.split(":")[0].strip()
-        fallback_query = f"{artist_name} - {main_title}"
+        main_title = book_title.split(":")[0].strip()
+        fallback_query = f"{author_name} - {main_title}"
 
         logger.info(f"No results found for full title. Trying fallback search with main title: {fallback_query}")
 
@@ -221,6 +221,7 @@ def search_and_download(ctx, grab_list, target, retry_list):
     if delete_searches:
         ctx.slskd.searches.delete(search["id"])
     return False
+
 
 def get_books(ctx, search_source, search_type, page_size) -> list:
     """Get books from Readarr based on search source and type."""

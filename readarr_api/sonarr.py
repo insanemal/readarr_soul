@@ -4,9 +4,9 @@ from warnings import warn
 
 from requests import Response
 
-from pyarr.const import DEPRECATION_WARNING
-from pyarr.exceptions import PyarrMissingArgument
-from pyarr.types import JsonArray, JsonObject
+from readarr_api.const import DEPRECATION_WARNING
+from readarr_api.exceptions import PyarrMissingArgument
+from readarr_api.types import JsonArray, JsonObject
 
 from .base import BaseArrAPI
 from .lib.alias_decorator import alias, aliased

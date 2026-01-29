@@ -4,8 +4,8 @@ from warnings import warn
 
 from requests import Response
 
-from pyarr.const import DEPRECATION_WARNING
-from pyarr.types import JsonArray, JsonObject
+from readarr_api.const import DEPRECATION_WARNING
+from readarr_api.types import JsonArray, JsonObject
 
 from .base import BaseArrAPI
 from .exceptions import PyarrMissingArgument
@@ -56,9 +56,7 @@ class RadarrAPI(BaseArrAPI):
     ## MOVIE
 
     # GET /movie
-    def get_movie(
-        self, id_: Optional[int] = None, tmdb: bool = False
-    ) -> Union[JsonArray, JsonObject]:  # sourcery skip: class-extract-method
+    def get_movie(self, id_: Optional[int] = None, tmdb: bool = False) -> Union[JsonArray, JsonObject]:  # sourcery skip: class-extract-method
         """Returns all movies in the database, movie based on the Radarr ID or TMDB id.
 
         Note:
@@ -106,7 +104,7 @@ class RadarrAPI(BaseArrAPI):
             tags (list[int], optional): List of tag id's. Defaults to [].
 
         Returns:
-            JsonObject: Dictonary with added record
+            JsonObject: Dictionary with added record
         """
         movie["rootFolderPath"] = root_dir
         movie["qualityProfileId"] = quality_profile_id
@@ -272,9 +270,7 @@ class RadarrAPI(BaseArrAPI):
         return self._put("movie/editor", self.ver_uri, data=data)
 
     # DELETE /movie/editor
-    def del_movies(
-        self, data: JsonObject
-    ) -> Union[Response, JsonObject, dict[Any, Any]]:
+    def del_movies(self, data: JsonObject) -> Union[Response, JsonObject, dict[Any, Any]]:
         """The delete operation allows mass deletion of movies (and optionally files)
 
         Args:
@@ -343,9 +339,7 @@ class RadarrAPI(BaseArrAPI):
         return self._get("moviefile", self.ver_uri, params=params)
 
     # DELETE /moviefile/{id}
-    def del_movie_file(
-        self, id_: Union[int, list]
-    ) -> Union[Response, JsonObject, dict[Any, Any]]:
+    def del_movie_file(self, id_: Union[int, list]) -> Union[Response, JsonObject, dict[Any, Any]]:
         """Allows for deletion of a moviefile by its database ID.
 
         Args:
@@ -364,9 +358,7 @@ class RadarrAPI(BaseArrAPI):
         )
 
     # GET /history/movie
-    def get_movie_history(
-        self, id_: int, event_type: Optional[RadarrEventType] = None
-    ) -> JsonArray:
+    def get_movie_history(self, id_: int, event_type: Optional[RadarrEventType] = None) -> JsonArray:
         """Get history for a given movie in database by its database ID
 
         Args:
@@ -506,9 +498,7 @@ class RadarrAPI(BaseArrAPI):
     ## COMMAND
 
     # POST /command
-    def post_command(
-        self, name: RadarrCommands, **kwargs: Optional[dict[str, Union[int, list[int]]]]
-    ) -> JsonObject:
+    def post_command(self, name: RadarrCommands, **kwargs: Optional[dict[str, Union[int, list[int]]]]) -> JsonObject:
         """Performs any of the predetermined Radarr command routines.
 
         Args:
@@ -666,9 +656,7 @@ class RadarrAPI(BaseArrAPI):
         return self._post("release", self.ver_uri, data=data)
 
     # POST /release/push
-    def post_release_push(
-        self, title: str, download_url: str, protocol: str, publish_date: datetime
-    ) -> Any:
+    def post_release_push(self, title: str, download_url: str, protocol: str, publish_date: datetime) -> Any:
         """If the title is wanted, Radarr will grab it.
 
         Args:
