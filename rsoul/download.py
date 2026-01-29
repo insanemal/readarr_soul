@@ -3,16 +3,17 @@ import os
 import shutil
 import logging
 from typing import Any, Optional, Dict, List, Tuple
+from .types import Book, Author, DownloadTarget, SlskdFile, SlskdDirectory, BookDownload, QualityProfile
 
 logger = logging.getLogger(__name__)
 
 
-def slskd_do_enqueue(slskd_client: Any, username: str, files: List[Dict[str, Any]], file_dir: str) -> Optional[List[Dict[str, Any]]]:
+def slskd_do_enqueue(slskd_client: Any, username: str, files: List[SlskdFile], file_dir: str) -> Optional[List[SlskdFile]]:
     """
     Takes a list of files to download and returns a list of files that were successfully added to the download queue
     It also adds to each file the details needed to track that specific file.
     """
-    downloads: List[Dict[str, Any]] = []
+    downloads: List[SlskdFile] = []
     try:
         enqueue = slskd_client.transfers.enqueue(username=username, files=files)
     except Exception:
@@ -48,7 +49,7 @@ def slskd_do_enqueue(slskd_client: Any, username: str, files: List[Dict[str, Any
         return None
 
 
-def slskd_download_status(slskd_client: Any, downloads: List[Dict[str, Any]]) -> bool:
+def slskd_download_status(slskd_client: Any, downloads: List[SlskdFile]) -> bool:
     """
     Takes a list of files and gets the status of each file and packs it into the file object.
     """
@@ -64,13 +65,13 @@ def slskd_download_status(slskd_client: Any, downloads: List[Dict[str, Any]]) ->
     return ok
 
 
-def downloads_all_done(downloads: List[Dict[str, Any]]) -> Tuple[bool, Optional[List[Dict[str, Any]]], int]:
+def downloads_all_done(downloads: List[SlskdFile]) -> Tuple[bool, Optional[List[SlskdFile]], int]:
     """
     Checks the status of all the files in a book and returns a flag if all done as well
     as returning a list of files with errors to check and how many files are in "Queued, Remotely"
     """
     all_done = True
-    error_list: List[Dict[str, Any]] = []
+    error_list: List[SlskdFile] = []
     remote_queue = 0
     for file in downloads:
         if file["status"] is not None:
@@ -87,25 +88,26 @@ def downloads_all_done(downloads: List[Dict[str, Any]]) -> Tuple[bool, Optional[
             if file["status"]["state"] == "Queued, Remotely":
                 remote_queue += 1
 
-    result_error_list: Optional[List[Dict[str, Any]]] = error_list if len(error_list) > 0 else None
+    result_error_list: Optional[List[SlskdFile]] = error_list if len(error_list) > 0 else None
     return all_done, result_error_list, remote_queue
 
 
 def download_book(
     slskd_client: Any,
-    target: Dict[str, Any],
+    target: DownloadTarget,
     username: str,
     file_dir: str,
-    directory: Dict[str, Any],
+    directory: SlskdDirectory,
     retry_list: Dict[str, Any],
-    grab_list: List[Dict[str, Any]],
-    file: Dict[str, Any],
+    grab_list: List[BookDownload],
+    file: SlskdFile,
 ) -> bool:
     directory["files"] = [file]
     filename = file["filename"]
 
     for i in range(0, len(directory["files"])):
-        directory["files"][i]["filename"] = file_dir + "\\" + directory["files"][i]["filename"]
+        if "\\" not in directory["files"][i]["filename"]:
+            directory["files"][i]["filename"] = file_dir + "\\" + directory["files"][i]["filename"]
 
     # Use the new enqueue function that returns tracked file objects with IDs
     downloads = slskd_do_enqueue(slskd_client, username, directory["files"], file_dir)
@@ -132,7 +134,7 @@ def download_book(
         return False
 
 
-def cancel_and_delete(slskd_client: Any, delete_dir: str, username: str, files: List[Dict[str, Any]], download_base_dir: str) -> None:
+def cancel_and_delete(slskd_client: Any, delete_dir: str, username: str, files: List[SlskdFile], download_base_dir: str) -> None:
     for file in files:
         slskd_client.transfers.cancel_download(username=username, id=file["id"])
 

@@ -1,6 +1,5 @@
 import time
 import logging
-import copy
 import os
 import math
 from typing import Any, Optional, Dict, List, Tuple, TYPE_CHECKING
@@ -8,15 +7,16 @@ from typing import Any, Optional, Dict, List, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from .config import Context
 
-from .display import print_search_summary, print_directory_summary
+from .display import print_search_summary
 from .match import book_match, verify_filetype
 from .download import download_book
 from .utils import get_current_page, update_current_page, is_docker
+from .types import Book, Author, DownloadTarget, SlskdFile, SlskdDirectory, BookDownload, QualityProfile
 
 logger = logging.getLogger(__name__)
 
 
-def gen_allowed_filetypes(qprofile: Dict[str, Any]) -> List[str]:
+def gen_allowed_filetypes(qprofile: QualityProfile) -> List[str]:
     """Generate a list of allowed filetypes from a quality profile."""
     allowed_filetypes: List[str] = []
     for item in qprofile["items"]:
@@ -39,83 +39,50 @@ def is_blacklisted(ctx: "Context", title: str) -> bool:
 
 def check_for_match(
     ctx: "Context",
-    dir_cache: Dict[str, Dict[str, List[str]]],
-    search_cache: Dict[str, Dict[str, Dict[str, Any]]],
-    target: Dict[str, Any],
+    file_cache: Dict[str, Dict[str, List[SlskdFile]]],
+    target: DownloadTarget,
     allowed_filetype: str,
-) -> Tuple[bool, str, Dict[str, Any], str, Optional[Dict[str, Any]]]:
+) -> Tuple[bool, str, SlskdDirectory, str, Optional[SlskdFile]]:
     """
-    Check for matching files in the directory cache.
+    Check for matching files in the file cache.
 
     Args:
         ctx: Application context
-        dir_cache: Dictionary containing cached directory information
-        search_cache: Dictionary containing cached search results
+        file_cache: Dictionary containing cached file information
         target: Target book/author information
         allowed_filetype: File type to search for (e.g., 'epub', 'pdf')
 
     Returns:
         Tuple: (found, username, directory, file_dir, file) or (False, "", {}, "", None)
     """
-    for username in dir_cache:
-        if not allowed_filetype in dir_cache[username]:
+    for username in file_cache:
+        if not allowed_filetype in file_cache[username]:
             continue
         logger.info(f"Parsing result from user: {username}")
 
-        for file_dir in dir_cache[username][allowed_filetype]:
-            if username not in search_cache:
-                logger.info(f"Add user to cache: {username}")
-                search_cache[username] = {}
+        # Construct a minimal directory object from the file list to pass to book_match
+        files = file_cache[username][allowed_filetype]
 
-            if file_dir not in search_cache[username]:
-                logger.info(f"Cache miss user: {username} folder: {file_dir}")
-                try:
-                    directory = ctx.slskd.users.directory(username=username, directory=file_dir)
+        result = book_match(
+            target,
+            files,
+            username,
+            allowed_filetype,
+            ignored_users=ctx.config.get("Search Settings", "ignored_users", fallback="").split(","),
+            minimum_match_ratio=ctx.config.getfloat("Search Settings", "minimum_filename_match_ratio", fallback=0.5),
+        )
 
-                    # Show clean directory summary instead of raw data
-                    print_directory_summary(username, directory)
-
-                    # Fix: Handle both list and dict return types from SLSKD API
-                    if isinstance(directory, list):
-                        # If it's a list, extract files from the first directory object and preserve name
-                        if len(directory) > 0 and isinstance(directory[0], dict) and "files" in directory[0]:
-                            logger.info("Converting list to dictionary format - extracting files from directory object")
-                            # Preserve the original directory name for later matching
-                            directory = {"files": directory[0]["files"], "name": directory[0]["name"]}
-                        else:
-                            logger.warning(f"Unexpected list structure from user: {username}, folder: {file_dir}")
-                            continue
-                    elif not isinstance(directory, dict) or "files" not in directory:
-                        # If it's not a dict or doesn't have 'files' key, skip
-                        logger.warning(f"Unexpected directory structure from user: {username}, folder: {file_dir}")
-                        continue
-
-                except Exception:
-                    logger.error(f"Error getting directory from user {username}", exc_info=True)
-                    continue
-
-                search_cache[username][file_dir] = directory
-            else:
-                logger.info(f"Pulling from cache: {username} folder: {file_dir}")
-                directory = copy.deepcopy(search_cache[username][file_dir])
-
-            result = book_match(
-                target,
-                directory["files"],
-                username,
-                allowed_filetype,
-                ignored_users=ctx.config.get("Search Settings", "ignored_users", fallback="").split(","),
-                minimum_match_ratio=ctx.config.getfloat("Search Settings", "minimum_filename_match_ratio", fallback=0.5),
-            )
-            if result != None:
-                return True, username, directory, file_dir, result
-            else:
-                continue
+        if result is not None:
+            # When a match is found, return the full file object.
+            # We also need file_dir and directory for the return tuple.
+            file_dir = result["filename"].rsplit("\\", 1)[0] if "\\" in result["filename"] else ""
+            directory = {"files": [result], "name": file_dir.split("\\")[-1] if "\\" in file_dir else file_dir}
+            return True, username, directory, file_dir, result
 
     return False, "", {}, "", None
 
 
-def search_and_download(ctx: "Context", grab_list: List[Dict[str, Any]], target: Dict[str, Any], retry_list: Dict[str, Any]) -> bool:
+def search_and_download(ctx: "Context", grab_list: List[BookDownload], target: DownloadTarget, retry_list: Dict[str, Any]) -> bool:
     """
     Search for a book and download it if a match is found.
 
@@ -199,29 +166,27 @@ def search_and_download(ctx: "Context", grab_list: List[Dict[str, Any]], target:
         print_search_summary(fallback_query, len(search_results), "fallback", "completed")  # Show final results
 
     # Continue with existing logic using search_results
-    dir_cache = {}
-    search_cache = {}
+    file_cache = {}
 
     for result in search_results:
         username = result["username"]
-        if username not in dir_cache:
-            dir_cache[username] = {}
+        if username not in file_cache:
+            file_cache[username] = {}
 
         logger.info(f"Truncating directory count of user: {username}")
         init_files = result["files"]
 
         for file in init_files:
-            file_dir = file["filename"].rsplit("\\", 1)[0]
             for allowed_filetype in allowed_filetypes:
                 if verify_filetype(file, allowed_filetype):
-                    if allowed_filetype not in dir_cache[username]:
-                        dir_cache[username][allowed_filetype] = []
-                    if file_dir not in dir_cache[username][allowed_filetype]:
-                        dir_cache[username][allowed_filetype].append(file_dir)
+                    if allowed_filetype not in file_cache[username]:
+                        file_cache[username][allowed_filetype] = []
+                    # Store the full file object
+                    file_cache[username][allowed_filetype].append(file)
 
     for allowed_filetype in allowed_filetypes:
         logger.info(f"Searching for matches with selected attributes: {allowed_filetype}")
-        found, username, directory, file_dir, file = check_for_match(ctx, dir_cache, search_cache, target, allowed_filetype)
+        found, username, directory, file_dir, file = check_for_match(ctx, file_cache, target, allowed_filetype)
 
         if found:
             if download_book(ctx.slskd, target, username, file_dir, directory, retry_list, grab_list, file):
@@ -234,7 +199,7 @@ def search_and_download(ctx: "Context", grab_list: List[Dict[str, Any]], target:
     return False
 
 
-def get_books(ctx: "Context", search_source: str, search_type: str, page_size: int) -> List[Dict[str, Any]]:
+def get_books(ctx: "Context", search_source: str, search_type: str, page_size: int) -> List[Book]:
     """Get books from Readarr based on search source and type."""
     current_page_file_path = os.path.join(ctx.config_dir, ".current_page.txt")
 
@@ -247,7 +212,7 @@ def get_books(ctx: "Context", search_source: str, search_type: str, page_size: i
         return []
 
     total_wanted = wanted["totalRecords"]
-    wanted_records: List[Dict[str, Any]] = []
+    wanted_records: List[Book] = []
 
     if search_type == "all":
         page = 1

@@ -3,6 +3,7 @@ import logging
 import re
 from typing import Any, Optional, Dict, List
 from .display import print_match_details
+from .utils import normalize_for_matching, title_contained_in_filename
 
 logger = logging.getLogger(__name__)
 
@@ -67,40 +68,8 @@ def book_match(
         logger.debug(f"No files found matching filetype: {filetype}")
         return None
 
-    # Helper function to normalize strings for better matching
-    def normalize_for_matching(text):
-        """Normalize text for better matching by handling common variations"""
-        # Convert to lowercase
-        text = text.lower()
-        # Replace underscores with spaces
-        text = text.replace("_", " ")
-        # Remove common punctuation that might vary
-        text = re.sub(r"[^\w\s]", " ", text)
-        # Normalize multiple spaces to single space
-        text = re.sub(r"\s+", " ", text)
-        # Strip whitespace
-        return text.strip()
-
-    # Helper function to check if target title is contained in filename
-    def title_contained_in_filename(target_title, filename):
-        """Check if the target title is contained in the filename with fuzzy matching"""
-        normalized_target = normalize_for_matching(target_title)
-        normalized_filename = normalize_for_matching(filename)
-
-        # Check direct containment
-        if normalized_target in normalized_filename:
-            return True
-
-        # Check word-by-word containment for partial matches
-        target_words = set(normalized_target.split())
-        filename_words = set(normalized_filename.split())
-
-        # If most of the target words are in the filename, it's likely a match
-        overlap = len(target_words.intersection(filename_words))
-        return overlap >= len(target_words) * 0.7  # 70% word overlap
-
     for slskd_file in filtered_files:
-        slskd_filename = slskd_file["filename"]
+        slskd_filename = slskd_file["filename"].split("\\")[-1]
         logger.info(f"Checking ratio on {slskd_filename} vs wanted {book_title} - {author_name}.{filetype.split(' ')[0]}")
 
         # First, check if this looks like a very good match based on title containment

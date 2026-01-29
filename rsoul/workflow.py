@@ -152,7 +152,7 @@ def run_workflow(ctx: "Context", download_targets: List[Dict[str, Any]]) -> Dict
     remove_wanted_on_failure = ctx.config.getboolean("Search Settings", "remove_wanted_on_failure", fallback=False)
     failure_file_path = os.path.join(ctx.config_dir, "failure_list.txt")
 
-    print_section_header("🎯 STARTING SEARCH PHASE")
+    print_section_header("STARTING SEARCH PHASE")
 
     for target in download_targets:
         book = target["book"]
@@ -180,7 +180,7 @@ def run_workflow(ctx: "Context", download_targets: List[Dict[str, Any]]) -> Dict
 
             failed_download += 1
 
-    print_section_header("📥 DOWNLOAD MONITORING PHASE")
+    print_section_header("DOWNLOAD MONITORING PHASE")
     failed_download += monitor_downloads(ctx, grab_list)
 
     # Import Phase

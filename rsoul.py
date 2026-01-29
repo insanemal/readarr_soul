@@ -5,7 +5,6 @@ import argparse
 import os
 import configparser
 import logging
-import traceback
 from rich.console import Console
 
 # Import from rsoul package
@@ -119,13 +118,13 @@ def main():
         # Construct Download Targets
         download_targets = []
         if len(wanted_books) > 0:
-            console.print(f"\n🎯 Found {len(wanted_books)} wanted books to process", style="bold green")
+            console.print(f"\nFound {len(wanted_books)} wanted books to process", style="bold green")
 
             for book in wanted_books:
                 try:
                     authorID = book["authorId"]
-                    author = readarr.get_author(authorID)
-                    qprofile = readarr.get_quality_profile(author["qualityProfileId"])
+                    author = ctx.readarr.get_author(authorID)
+                    qprofile = ctx.readarr.get_quality_profile(author["qualityProfileId"])
                     download_targets.append({"book": book, "author": author, "filetypes": qprofile})
                 except Exception:
                     logger.exception(f"Error processing book {book.get('title', 'unknown')}")
@@ -136,17 +135,16 @@ def main():
             try:
                 run_workflow(ctx, download_targets)
             except Exception:
-                logger.error(traceback.format_exc())
-                logger.error("\n Fatal error! Exiting...")
+                logger.exception("Fatal error encountered during workflow execution")
                 sys.exit(1)
         else:
-            console.print("ℹ️  No releases wanted. Nothing to do!", style="blue")
+            console.print("No releases wanted. Nothing to do!", style="blue")
             logger.info("No releases wanted. Exiting...")
 
     except KeyboardInterrupt:
-        console.print("\n🛑 Operation cancelled by user", style="bold yellow")
+        console.print("\nOperation cancelled by user", style="bold yellow")
     except ValueError as e:
-        logger.error(f"❌ {e}")
+        logger.error(f"{e}")
         sys.exit(1)
     except Exception as e:
         logger.exception("An unexpected error occurred")

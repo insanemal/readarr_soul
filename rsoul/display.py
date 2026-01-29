@@ -48,22 +48,22 @@ class CustomRichHandler(RichHandler):
     def emit(self, record):
         # Add color coding based on log level
         if record.levelno >= logging.ERROR:
-            record.msg = f"🚨 {record.msg}"
+            record.msg = f"{record.msg}"
         elif record.levelno >= logging.WARNING:
-            record.msg = f"⚠️  {record.msg}"
+            record.msg = f"{record.msg}"
         elif record.levelno >= logging.INFO:
             if "SUCCESSFUL MATCH" in str(record.msg):
-                record.msg = f"✅ {record.msg}"
+                record.msg = f"{record.msg}"
             elif "Searching book" in str(record.msg):
-                record.msg = f"🔍 {record.msg}"
+                record.msg = f"{record.msg}"
             elif "Starting Readarr import" in str(record.msg):
-                record.msg = f"📚 {record.msg}"
+                record.msg = f"{record.msg}"
             elif "Downloads added" in str(record.msg):
-                record.msg = f"⬇️  {record.msg}"
+                record.msg = f"{record.msg}"
             elif "All files finished downloading" in str(record.msg):
-                record.msg = f"🎉 {record.msg}"
+                record.msg = f"{record.msg}"
             else:
-                record.msg = f"ℹ️  {record.msg}"
+                record.msg = f"{record.msg}"
 
         super().emit(record)
 
@@ -85,11 +85,9 @@ def print_startup_banner():
 def print_search_summary(query, results_count, search_type="main", status="completed"):
     """Print a formatted search summary using full terminal width"""
     if search_type == "fallback":
-        icon = "🔄"
         style = "yellow"
         search_text = f"Fallback Search: {query}"
     else:
-        icon = "🔍"
         style = "blue"
         search_text = f"Main Search: {query}"
 
@@ -98,12 +96,12 @@ def print_search_summary(query, results_count, search_type="main", status="compl
     table.add_column("", style=style, ratio=1, min_width=20)
     table.add_column("", style="white", ratio=4)
 
-    table.add_row(f"{icon} Query:", search_text)
+    table.add_row("Query:", search_text)
 
     if status == "searching":
-        table.add_row("⏳ Status:", "Searching...")
+        table.add_row("Status:", "Searching...")
     else:
-        table.add_row("📊 Results:", f"{results_count} files found")
+        table.add_row("Results:", f"{results_count} files found")
 
     console.print(table)
 
@@ -126,9 +124,9 @@ def print_directory_summary(username, directory_data):
     table.add_column("", style="cyan", ratio=1, min_width=20)
     table.add_column("", style="white", ratio=4)
 
-    table.add_row("👤 User:", username)
-    table.add_row("📁 Directory:", dir_name.split("\\")[-1])
-    table.add_row("📄 Files:", f"{file_count} files")
+    table.add_row("User:", username)
+    table.add_row("Directory:", dir_name.split("\\")[-1])
+    table.add_row("Files:", f"{file_count} files")
 
     console.print(table)
 
@@ -136,13 +134,13 @@ def print_directory_summary(username, directory_data):
 def print_download_summary(downloads):
     """Print a formatted table of downloads using full width"""
     if not downloads:
-        console.print("❌ No downloads to process", style="red")
+        console.print("No downloads to process", style="red")
         return
 
     # Force full width with explicit width setting
-    table = Table(title="📥 Download Queue", box=box.ROUNDED, expand=True, width=console.width)
-    table.add_column("👤 Username", style="cyan", ratio=1, min_width=15)
-    table.add_column("📁 Directory", style="magenta", ratio=3)
+    table = Table(title="Download Queue", box=box.ROUNDED, expand=True, width=console.width)
+    table.add_column("Username", style="cyan", ratio=1, min_width=15)
+    table.add_column("Directory", style="magenta", ratio=3)
 
     for download in downloads:
         username = download["username"]
@@ -158,10 +156,10 @@ def print_import_summary(commands):
         return
 
     # Force full width
-    table = Table(title="📚 Import Operations", box=box.ROUNDED, expand=True, width=console.width)
-    table.add_column("👤 Author", style="green", ratio=2, min_width=20)
-    table.add_column("🆔 Command ID", style="yellow", ratio=1, min_width=12)
-    table.add_column("📊 Status", style="white", ratio=1, min_width=10)
+    table = Table(title="Import Operations", box=box.ROUNDED, expand=True, width=console.width)
+    table.add_column("Author", style="green", ratio=2, min_width=20)
+    table.add_column("Command ID", style="yellow", ratio=1, min_width=12)
+    table.add_column("Status", style="white", ratio=1, min_width=10)
 
     for command in commands:
         # Extract author name from command if available
@@ -181,10 +179,10 @@ def print_match_details(filename, ratio, username, filetype):
     table.add_column("", style="cyan", ratio=1, min_width=20)
     table.add_column("", style="white", ratio=4)
 
-    table.add_row("📄 File:", filename)
-    table.add_row("👤 User:", username)
-    table.add_row("📊 Match Ratio:", f"{ratio:.3f}")
-    table.add_row("📎 Type:", filetype)
+    table.add_row("File:", filename)
+    table.add_row("User:", username)
+    table.add_row("Match Ratio:", f"{ratio:.3f}")
+    table.add_row("Type:", filetype)
 
     console.print(table, style="green")
 
