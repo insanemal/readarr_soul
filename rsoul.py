@@ -12,7 +12,7 @@ from rich.console import Console
 from readarr_api import ReadarrAPI
 import slskd_api
 
-from rsoul.config import Context, setup_logging
+from rsoul.config import Context, setup_logging, validate_config
 from rsoul.display import print_startup_banner, console
 from rsoul.utils import is_docker
 from rsoul.workflow import run_workflow
@@ -78,6 +78,9 @@ def main():
         # Setup Logging
         setup_logging(config)
 
+        # Validate Config
+        validate_config(config)
+
         # Extract Config Values
         slskd_api_key = config["Slskd"]["api_key"]
         slskd_host_url = config["Slskd"]["host_url"]
@@ -124,8 +127,8 @@ def main():
                     author = readarr.get_author(authorID)
                     qprofile = readarr.get_quality_profile(author["qualityProfileId"])
                     download_targets.append({"book": book, "author": author, "filetypes": qprofile})
-                except Exception as e:
-                    logger.error(f"Error processing book {book.get('title', 'unknown')}: {e}")
+                except Exception:
+                    logger.exception(f"Error processing book {book.get('title', 'unknown')}")
                     continue
 
         # Run Workflow
@@ -142,6 +145,9 @@ def main():
 
     except KeyboardInterrupt:
         console.print("\n🛑 Operation cancelled by user", style="bold yellow")
+    except ValueError as e:
+        logger.error(f"❌ {e}")
+        sys.exit(1)
     except Exception as e:
         logger.exception("An unexpected error occurred")
     finally:

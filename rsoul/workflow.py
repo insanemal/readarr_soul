@@ -2,13 +2,18 @@ import time
 import logging
 import datetime
 import os
+from typing import Any, Dict, List, TYPE_CHECKING
 from . import search, postprocess, download
+
+if TYPE_CHECKING:
+    from .config import Context
+
 from .display import print_section_header, print_download_summary
 
 logger = logging.getLogger(__name__)
 
 
-def monitor_downloads(ctx, grab_list):
+def monitor_downloads(ctx: "Context", grab_list: List[Dict[str, Any]]) -> int:
     """
     Monitor the progress of downloads and handle retries or timeouts.
     """
@@ -136,12 +141,12 @@ def monitor_downloads(ctx, grab_list):
     return failed_download
 
 
-def run_workflow(ctx, download_targets):
+def run_workflow(ctx: "Context", download_targets: List[Dict[str, Any]]) -> Dict[str, int]:
     """
     Main workflow: Search, Monitor, Import, and Cleanup.
     """
-    grab_list = []
-    retry_list = {}
+    grab_list: List[Dict[str, Any]] = []
+    retry_list: Dict[str, Any] = {}
     failed_download = 0
 
     remove_wanted_on_failure = ctx.config.getboolean("Search Settings", "remove_wanted_on_failure", fallback=False)

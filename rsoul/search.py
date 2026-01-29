@@ -3,6 +3,11 @@ import logging
 import copy
 import os
 import math
+from typing import Any, Optional, Dict, List, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .config import Context
+
 from .display import print_search_summary, print_directory_summary
 from .match import book_match, verify_filetype
 from .download import download_book
@@ -11,9 +16,9 @@ from .utils import get_current_page, update_current_page, is_docker
 logger = logging.getLogger(__name__)
 
 
-def gen_allowed_filetypes(qprofile):
+def gen_allowed_filetypes(qprofile: Dict[str, Any]) -> List[str]:
     """Generate a list of allowed filetypes from a quality profile."""
-    allowed_filetypes = []
+    allowed_filetypes: List[str] = []
     for item in qprofile["items"]:
         if item["allowed"]:
             allowed_type = item["quality"]["name"].lower()
@@ -22,7 +27,7 @@ def gen_allowed_filetypes(qprofile):
     return allowed_filetypes
 
 
-def is_blacklisted(ctx, title: str) -> bool:
+def is_blacklisted(ctx: "Context", title: str) -> bool:
     """Check if a title contains any blacklisted words."""
     blacklist = ctx.config.get("Search Settings", "title_blacklist", fallback="").lower().split(",")
     for word in blacklist:
@@ -32,7 +37,13 @@ def is_blacklisted(ctx, title: str) -> bool:
     return False
 
 
-def check_for_match(ctx, dir_cache, search_cache, target, allowed_filetype):
+def check_for_match(
+    ctx: "Context",
+    dir_cache: Dict[str, Dict[str, List[str]]],
+    search_cache: Dict[str, Dict[str, Dict[str, Any]]],
+    target: Dict[str, Any],
+    allowed_filetype: str,
+) -> Tuple[bool, str, Dict[str, Any], str, Optional[Dict[str, Any]]]:
     """
     Check for matching files in the directory cache.
 
@@ -79,8 +90,8 @@ def check_for_match(ctx, dir_cache, search_cache, target, allowed_filetype):
                         logger.warning(f"Unexpected directory structure from user: {username}, folder: {file_dir}")
                         continue
 
-                except Exception as e:
-                    logger.error(f"Error getting directory from user {username}: {e}")
+                except Exception:
+                    logger.error(f"Error getting directory from user {username}", exc_info=True)
                     continue
 
                 search_cache[username][file_dir] = directory
@@ -104,7 +115,7 @@ def check_for_match(ctx, dir_cache, search_cache, target, allowed_filetype):
     return False, "", {}, "", None
 
 
-def search_and_download(ctx, grab_list, target, retry_list):
+def search_and_download(ctx: "Context", grab_list: List[Dict[str, Any]], target: Dict[str, Any], retry_list: Dict[str, Any]) -> bool:
     """
     Search for a book and download it if a match is found.
 
@@ -223,7 +234,7 @@ def search_and_download(ctx, grab_list, target, retry_list):
     return False
 
 
-def get_books(ctx, search_source, search_type, page_size) -> list:
+def get_books(ctx: "Context", search_source: str, search_type: str, page_size: int) -> List[Dict[str, Any]]:
     """Get books from Readarr based on search source and type."""
     current_page_file_path = os.path.join(ctx.config_dir, ".current_page.txt")
 
@@ -231,12 +242,12 @@ def get_books(ctx, search_source, search_type, page_size) -> list:
 
     try:
         wanted = api_method(page_size=page_size, sort_dir="ascending", sort_key="title")
-    except Exception as ex:
-        logger.error(f"An error occurred when attempting to get records from {search_source}: {ex}")
+    except Exception:
+        logger.error(f"An error occurred when attempting to get records from {search_source}", exc_info=True)
         return []
 
     total_wanted = wanted["totalRecords"]
-    wanted_records = []
+    wanted_records: List[Dict[str, Any]] = []
 
     if search_type == "all":
         page = 1
@@ -244,8 +255,8 @@ def get_books(ctx, search_source, search_type, page_size) -> list:
             try:
                 wanted = api_method(page=page, page_size=page_size, sort_dir="ascending", sort_key="title")
                 wanted_records.extend(wanted["records"])
-            except Exception as ex:
-                logger.error(f"Failed to grab records from {search_source} page {page}: {ex}")
+            except Exception:
+                logger.error(f"Failed to grab records from {search_source} page {page}", exc_info=True)
                 break
             page += 1
 
@@ -253,8 +264,8 @@ def get_books(ctx, search_source, search_type, page_size) -> list:
         page = get_current_page(current_page_file_path)
         try:
             wanted_records = api_method(page=page, page_size=page_size, sort_dir="ascending", sort_key="title")["records"]
-        except Exception as ex:
-            logger.error(f"Failed to grab record from {search_source}: {ex}")
+        except Exception:
+            logger.error(f"Failed to grab record from {search_source}", exc_info=True)
 
         page = 1 if page >= math.ceil(total_wanted / page_size) else page + 1
         update_current_page(current_page_file_path, page)

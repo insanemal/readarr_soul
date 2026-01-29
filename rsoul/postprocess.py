@@ -1,7 +1,6 @@
 import os
 import shutil
 import logging
-import traceback
 import re
 import difflib
 import time
@@ -38,9 +37,8 @@ def move_failed_import(src_path: str):
         else:
             logger.warning(f"⚠️ Failed import source not found: {folder_name}")
 
-    except Exception as e:
-        logger.error(f"❌ Error moving failed import from {src_path}: {e}")
-        logger.error(f"🔍 Traceback: {traceback.format_exc()}")
+    except Exception:
+        logger.exception(f"❌ Error moving failed import from {src_path}")
 
 
 def process_imports(ctx: Any, grab_list: list):
@@ -110,19 +108,18 @@ def process_imports(ctx: Any, grab_list: list):
                                     logger.warning(f"⚠️ ISBN mismatch: expected {book_id}, got {book_to_test}")
                                     match = False
                             else:
-                                logger.warning(f"⚠️ No book found for ISBN {isbn}, allowing import")
-                                match = True
+                                logger.warning(f"⚠️ No book found for ISBN {isbn} - cannot verify")
+                                match = False
                         except Exception as e:
-                            logger.warning(f"⚠️ Error looking up ISBN {isbn}: {e}, allowing import")
-                            match = True
+                            logger.error(f"❌ Error looking up ISBN {isbn}: {e}")
+                            match = False
                     else:
-                        logger.info("ℹ️ No ISBN found in metadata, allowing import")
-                        match = True
+                        logger.warning("⚠️ No ISBN found in metadata - cannot verify")
+                        match = False
 
                 except Exception as e:
                     logger.error(f"❌ Error reading MOBI/AZW3 metadata: {e}")
-                    logger.info("ℹ️ Allowing import despite metadata error")
-                    match = True
+                    match = False
 
             elif extension == "epub":
                 try:
@@ -157,13 +154,12 @@ def process_imports(ctx: Any, grab_list: list):
                             logger.warning(f"⚠️ Title validation failed - insufficient similarity")
                             match = False
                     else:
-                        logger.warning("⚠️ No title found in EPUB metadata, allowing import")
-                        match = True
+                        logger.warning("⚠️ No title found in EPUB metadata - cannot verify")
+                        match = False
 
                 except Exception as e:
                     logger.error(f"❌ Error reading EPUB metadata: {e}")
-                    logger.info("ℹ️ Allowing import despite metadata error")
-                    match = True
+                    match = False
 
             else:
                 logger.info(f"ℹ️ File type {extension} - skipping metadata validation")
@@ -196,7 +192,7 @@ def process_imports(ctx: Any, grab_list: list):
                             if os.path.exists(folder) and not os.listdir(folder):
                                 logger.info(f"🗑️ Removing empty source directory: {folder}")
                                 shutil.rmtree(folder)
-                        except Exception as e:
+                        except OSError as e:
                             logger.warning(f"⚠️ Could not remove source directory {folder}: {e}")
 
                     except Exception as e:
@@ -213,10 +209,9 @@ def process_imports(ctx: Any, grab_list: list):
                 logger.warning(f"❌ Metadata validation failed for {filename}")
                 failed_imports.append((folder, filename, author_name_sanitized, "Metadata validation failed"))
 
-        except Exception as e:
-            logger.error(f"❌ Unexpected error processing {book_download.get('filename', 'unknown')}: {e}")
-            logger.error(f"🔍 Traceback: {traceback.format_exc()}")
-            failed_imports.append((book_download.get("dir", "unknown"), book_download.get("filename", "unknown"), book_download.get("author_name", "unknown"), f"Unexpected error: {e}"))
+        except Exception:
+            logger.exception(f"❌ Unexpected error processing {book_download.get('filename', 'unknown')}")
+            failed_imports.append((book_download.get("dir", "unknown"), book_download.get("filename", "unknown"), book_download.get("author_name", "unknown"), "Unexpected error"))
 
     # Handle failed imports
     if failed_imports:
@@ -272,9 +267,8 @@ def process_imports(ctx: Any, grab_list: list):
                 commands.append(command)
                 logger.info(f"✅ Import command created - ID: {command['id']} for folder: {author_folder}")
 
-            except Exception as e:
-                logger.error(f"❌ Failed to create import command for {author_folder}: {e}")
-                logger.error(f"🔍 Traceback: {traceback.format_exc()}")
+            except Exception:
+                logger.exception(f"❌ Failed to create import command for {author_folder}")
 
         if commands:
             print_import_summary(commands)

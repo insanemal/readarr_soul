@@ -1,12 +1,13 @@
 import difflib
 import logging
 import re
+from typing import Any, Optional, Dict, List
 from .display import print_match_details
 
 logger = logging.getLogger(__name__)
 
 
-def verify_filetype(file, allowed_filetype):
+def verify_filetype(file: Dict[str, Any], allowed_filetype: str) -> bool:
     current_filetype = file["filename"].split(".")[-1].lower()
     logger.debug(f"Current file type: {current_filetype}")
     if current_filetype == allowed_filetype.split(" ")[0]:
@@ -15,7 +16,7 @@ def verify_filetype(file, allowed_filetype):
         return False
 
 
-def check_ratio(separator, ratio, book_filename, slskd_filename, minimum_match_ratio):
+def check_ratio(separator: str, ratio: float, book_filename: str, slskd_filename: str, minimum_match_ratio: float) -> float:
     if ratio < minimum_match_ratio:
         if separator != "":
             book_filename_word_count = len(book_filename.split()) * -1
@@ -27,7 +28,14 @@ def check_ratio(separator, ratio, book_filename, slskd_filename, minimum_match_r
     return ratio
 
 
-def book_match(target, slskd_files, username, filetype, ignored_users, minimum_match_ratio):
+def book_match(
+    target: Dict[str, Any],
+    slskd_files: List[Dict[str, Any]],
+    username: str,
+    filetype: str,
+    ignored_users: List[str],
+    minimum_match_ratio: float,
+) -> Optional[Dict[str, Any]]:
     """
     Match target book with available files, filtering by correct filetype.
     Enhanced to handle variations in punctuation, underscores, and additional text.

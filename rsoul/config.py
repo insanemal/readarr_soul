@@ -1,5 +1,6 @@
 import logging
 import sys
+import configparser
 from dataclasses import dataclass, field
 from typing import Any, Optional, Dict
 
@@ -28,6 +29,23 @@ def setup_logging(config):
         datefmt="[%X]",
         handlers=[CustomRichHandler(console=console, show_time=True, show_path=False)],
     )
+
+
+def validate_config(config: configparser.ConfigParser) -> None:
+    """
+    Validate that the configuration has all required sections and keys.
+    """
+    required = {
+        "Slskd": ["api_key", "host_url"],
+        "Readarr": ["api_key", "host_url"],
+    }
+
+    for section, keys in required.items():
+        if section not in config:
+            raise ValueError(f"Configuration Error: Missing required section '[{section}]'")
+        for key in keys:
+            if key not in config[section]:
+                raise ValueError(f"Configuration Error: Missing required key '{key}' in section '{section}'")
 
 
 @dataclass
