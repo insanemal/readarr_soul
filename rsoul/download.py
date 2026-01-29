@@ -21,30 +21,41 @@ def slskd_do_enqueue(slskd_client: Any, username: str, files: List[SlskdFile], f
         return None
 
     if enqueue:
-        time.sleep(5)
-        # Fetch downloads to get IDs
-        try:
-            download_list = slskd_client.transfers.get_downloads(username=username)
-            for file in files:
-                for directory in download_list["directories"]:
-                    # Match directory name (ignoring path differences if possible, but soularr uses exact match)
-                    # rsoul uses sanitized names or just passes directory['name']
-                    # We need to be careful here. In rsoul, file_dir is the full path?
-                    # Let's check how file_dir is passed.
-                    if directory["directory"] == file_dir.split("\\")[-1] or directory["directory"] == file_dir:
-                        for slskd_file in directory["files"]:
-                            if file["filename"].split("\\")[-1] == slskd_file["filename"]:
-                                file_details = {}
-                                file_details["filename"] = file["filename"]
-                                file_details["id"] = slskd_file["id"]
-                                file_details["file_dir"] = file_dir
-                                file_details["username"] = username
-                                file_details["size"] = file["size"]
-                                downloads.append(file_details)
-            return downloads
-        except Exception:
-            logger.error("Error getting download list after enqueue", exc_info=True)
-            return None
+        # Poll for downloads to appear (handle race conditions)
+        for attempt in range(4):
+            time.sleep(2)
+            downloads = []  # Reset on each attempt
+            try:
+                download_list = slskd_client.transfers.get_downloads(username=username)
+                for file in files:
+                    for directory in download_list["directories"]:
+                        # Match directory name (full path or basename)
+                        if directory["directory"] == file_dir.split("\\")[-1] or directory["directory"] == file_dir:
+                            for slskd_file in directory["files"]:
+                                # Match filename (full path or basename)
+                                target_filename = file["filename"]
+                                target_basename = target_filename.split("\\")[-1]
+                                slskd_filename = slskd_file["filename"]
+
+                                if slskd_filename == target_filename or slskd_filename == target_basename:
+                                    file_details = {}
+                                    file_details["filename"] = file["filename"]
+                                    file_details["id"] = slskd_file["id"]
+                                    file_details["file_dir"] = file_dir
+                                    file_details["username"] = username
+                                    file_details["size"] = file["size"]
+                                    downloads.append(file_details)
+
+                # If we found downloads, return them immediately
+                if downloads:
+                    return downloads
+
+            except Exception:
+                logger.error("Error getting download list after enqueue", exc_info=True)
+                if attempt == 3:
+                    return None
+
+        return None
     else:
         return None
 
