@@ -1,3 +1,9 @@
 /.venv
 config.ini
 .current_page.txt
+AGENTS.md
+docs/
+.gitignore
+pyproject.toml
+__pycache__/
+*.pyc

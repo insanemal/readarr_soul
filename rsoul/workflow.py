@@ -1,0 +1,187 @@
+import time
+import logging
+import datetime
+import os
+from . import search, postprocess, download
+from .display import print_section_header, print_download_summary
+
+logger = logging.getLogger(__name__)
+
+
+def monitor_downloads(ctx, grab_list):
+    """
+    Monitor the progress of downloads and handle retries or timeouts.
+    """
+    slskd = ctx.slskd
+    stalled_timeout = int(ctx.config["Slskd"].get("stalled_timeout", 3600))
+    remote_queue_timeout = int(ctx.config["Slskd"].get("remote_queue_timeout", 300))
+    slskd_download_dir = ctx.config["Slskd"]["download_dir"]
+
+    # Get initial download status
+    downloads = slskd.transfers.get_all_downloads()
+    print_download_summary(downloads)
+
+    slskd_host_url = ctx.config["Slskd"]["host_url"]
+    slskd_url_base = ctx.config["Slskd"].get("url_base", "/")
+    logger.info(f"Waiting for downloads... monitor at: {''.join([slskd_host_url, slskd_url_base, 'downloads'])}")
+
+    failed_download = 0
+
+    while True:
+        if not grab_list:
+            break
+
+        unfinished = 0
+
+        # Iterate over a copy of the list so we can modify the original
+        for artist_folder in list(grab_list):
+            username = artist_folder["username"]
+
+            # Update status for all files in this folder using ID-based tracking
+            if not download.slskd_download_status(slskd, artist_folder["files"]):
+                artist_folder["error_count"] += 1
+
+            # Check overall status
+            album_done, problems, remote_queued_count = download.downloads_all_done(artist_folder["files"])
+
+            # Check Stalled Timeout (Total time since start)
+            if (time.time() - artist_folder["count_start"]) >= stalled_timeout:
+                logger.error(f"Timeout waiting for download: {artist_folder['title']} from {username}")
+                download.cancel_and_delete(slskd, artist_folder["dir"], username, artist_folder["files"], slskd_download_dir)
+                grab_list.remove(artist_folder)
+                failed_download += 1
+                continue
+
+            # Check Remote Queue Timeout (Time stuck in remote queue)
+            if remote_queued_count == len(artist_folder["files"]):
+                if (time.time() - artist_folder["count_start"]) >= remote_queue_timeout:
+                    logger.error(f"Remote queue timeout: {artist_folder['title']} from {username}")
+                    download.cancel_and_delete(slskd, artist_folder["dir"], username, artist_folder["files"], slskd_download_dir)
+                    grab_list.remove(artist_folder)
+                    failed_download += 1
+                    continue
+
+            if not album_done:
+                unfinished += 1
+
+            # Handle Problems
+            if problems:
+                abort_album = False
+
+                # Check if we should abort based on types of errors
+                for prob_file in problems:
+                    state = prob_file["status"]["state"]
+
+                    # RETRY LOGIC
+                    if state in ["Completed, Cancelled", "Completed, TimedOut", "Completed, Errored", "Completed, Aborted", "Completed, Rejected"]:
+                        # Special handling for "Completed, Rejected"
+                        if state == "Completed, Rejected":
+                            if len(problems) == len(artist_folder["files"]):
+                                logger.error(f"All files rejected by user {username}")
+                                abort_album = True
+                                break
+
+                            # Check if we have retried too many times for rejections
+                            if artist_folder["rejected_retries"] >= int(len(artist_folder["files"]) * 1.2):
+                                logger.error(f"Too many rejection retries for {username}")
+                                abort_album = True
+                                break
+
+                            artist_folder["rejected_retries"] += 1
+
+                        # Locate the specific file in our main list to update its retry count
+                        for track_file in artist_folder["files"]:
+                            if track_file["filename"] == prob_file["filename"]:
+                                if "retry" not in track_file:
+                                    track_file["retry"] = 0
+
+                                track_file["retry"] += 1
+
+                                if track_file["retry"] < 5:
+                                    logger.info(f"Retrying file: {track_file['filename']} (Attempt {track_file['retry']})")
+                                    # Re-queue specific file
+                                    requeue = download.slskd_do_enqueue(slskd, username, [track_file], artist_folder["dir"])
+
+                                    if requeue:
+                                        # Update ID
+                                        track_file["id"] = requeue[0]["id"]
+                                        # Reset status to None so we don't catch it again immediately
+                                        track_file["status"] = None
+                                        time.sleep(1)
+                                    else:
+                                        logger.warning(f"Failed to requeue {track_file['filename']}")
+                                        abort_album = True
+                                else:
+                                    logger.error(f"Max retries reached for {track_file['filename']}")
+                                    abort_album = True
+                                break
+
+                    if abort_album:
+                        break
+
+                if abort_album:
+                    logger.error(f"Aborting download for {artist_folder['title']} from {username}")
+                    download.cancel_and_delete(slskd, artist_folder["dir"], username, artist_folder["files"], slskd_download_dir)
+                    grab_list.remove(artist_folder)
+                    failed_download += 1
+                    continue
+
+        if unfinished == 0:
+            logger.info("All downloads finished!")
+            time.sleep(5)
+            break
+
+        time.sleep(10)
+
+    return failed_download
+
+
+def run_workflow(ctx, download_targets):
+    """
+    Main workflow: Search, Monitor, Import, and Cleanup.
+    """
+    grab_list = []
+    retry_list = {}
+    failed_download = 0
+
+    remove_wanted_on_failure = ctx.config.getboolean("Search Settings", "remove_wanted_on_failure", fallback=False)
+    failure_file_path = os.path.join(ctx.config_dir, "failure_list.txt")
+
+    print_section_header("🎯 STARTING SEARCH PHASE")
+
+    for target in download_targets:
+        book = target["book"]
+        author = target["author"]
+        artist_name = author["authorName"]
+
+        success = search.search_and_download(ctx, grab_list, target, retry_list)
+
+        if not success:
+            if remove_wanted_on_failure:
+                logger.error(f"Failed to grab album: {book['title']} for artist: {artist_name}." + ' Failed album removed from wanted list and added to "failure_list.txt"')
+                book["monitored"] = False
+                # Use ctx.readarr for Readarr calls
+                edition = ctx.readarr.get_edition(book["id"])
+                ctx.readarr.upd_book(book=book, editions=edition)
+
+                current_datetime = datetime.datetime.now()
+                current_datetime_str = current_datetime.strftime("%d/%m/%Y %H:%M:%S")
+                failure_string = current_datetime_str + " - " + artist_name + ", " + book["title"] + "\n"
+
+                with open(failure_file_path, "a") as file:
+                    file.write(failure_string)
+            else:
+                logger.error(f"Failed to grab album: {book['title']} for artist: {artist_name}")
+
+            failed_download += 1
+
+    print_section_header("📥 DOWNLOAD MONITORING PHASE")
+    failed_download += monitor_downloads(ctx, grab_list)
+
+    # Import Phase
+    postprocess.process_imports(ctx, grab_list)
+
+    # Cleanup
+    ctx.slskd.transfers.remove_completed_downloads()
+
+    return {"failed_download": failed_download, "grabbed_count": len(grab_list)}

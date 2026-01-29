@@ -10,7 +10,7 @@
 
 # About
 
-WIP. Fork of Soularr to do the same with Readarr.
+WIP. Fork of Soularr to do the same with Readarr. Now structured as a modular Python package for improved maintainability and cleaner code.
 
 It works. Mostly. Doesn't have a container built. So you're on your own!
 
