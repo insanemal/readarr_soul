@@ -8,11 +8,12 @@
 
 # About
 
-**R:soul** is an automated downloader that bridges **Readarr** (for book management) with **Soulseek** (for peer-to-peer file sharing). It automatically searches for missing books in your Readarr library, finds them on Soulseek via `slskd`, downloads them, and imports them back into Readarr.
+**R:soul** is an automated downloader that bridges **Readarr** (for book management) with **Soulseek** 
 
-This project is a fork of [Soularr](https://github.com/mrusse/soularr) (originally for Lidarr/Music), now fully refactored and adapted for the specific needs of ebooks.
+This project is a fork of [Soularr](https://github.com/mrusse/soularr) (originally for Lidarr), now fully refactored and adapted for Readarr
 
 > **Note**: This project is **not** affiliated with Readarr. Please do not contact the Readarr team for support regarding this script.
+> **Note2 **: This project is **not** affiliated with Soularr. Please do not contact the Soularr team for support regarding this script.
 
 ## Quick Start
 
