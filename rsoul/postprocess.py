@@ -41,13 +41,20 @@ def move_failed_import(src_path: str):
         logger.exception(f"Error moving failed import from {src_path}")
 
 
-def validate_metadata(file_path: str, book_title: str, book_id: int, readarr_client: Any) -> bool:
+def validate_metadata(file_path: str, book_title: str, book_id: int, ctx: Any) -> bool:
     """
     Validate file metadata against Readarr book info.
     Returns True if validation passes or is skipped for the file type, False otherwise.
     """
     extension = file_path.split(".")[-1].lower()
     match = False
+    readarr_client = ctx.readarr
+
+    # Get thresholds from config
+    ratio_exact = ctx.config.getfloat("Postprocessing", "match_ratio_exact", fallback=0.8)
+    ratio_normalized = ctx.config.getfloat("Postprocessing", "match_ratio_normalized", fallback=0.85)
+    ratio_word = ctx.config.getfloat("Postprocessing", "match_ratio_word", fallback=0.7)
+    ratio_loose = ctx.config.getfloat("Postprocessing", "match_ratio_loose", fallback=0.85)
 
     # Enhanced metadata validation with better error handling
     if extension in ["azw3", "mobi"]:
@@ -108,7 +115,16 @@ def validate_metadata(file_path: str, book_title: str, book_id: int, readarr_cli
                 word_similarity = word_intersection / word_union if word_union > 0 else 0
                 logger.info(f"Word-based similarity: {word_similarity:.3f}")
 
-                if diff > 0.8 or normalized_diff > 0.85 or word_similarity > 0.7:
+                # Loose match: Remove content in brackets/parentheses and compare
+                clean_title = re.sub(r"\s*[\(\[].*?[\)\]]", "", title).strip()
+                clean_book_title = re.sub(r"\s*[\(\[].*?[\)\]]", "", book_title).strip()
+
+                clean_diff = 0.0
+                if clean_title and clean_book_title:
+                    clean_diff = difflib.SequenceMatcher(None, clean_title.lower(), clean_book_title.lower()).ratio()
+                    logger.info(f"Loose match (brackets removed) ratio: {clean_diff:.3f} ('{clean_title}' vs '{clean_book_title}')")
+
+                if diff > ratio_exact or normalized_diff > ratio_normalized or word_similarity > ratio_word or clean_diff > ratio_loose:
                     logger.info("Title validation passed")
                     match = True
                 else:
@@ -232,8 +248,18 @@ def monitor_imports(readarr_client: Any, commands: list) -> None:
             else:
                 folder_name = f"Task {task['id']}"
 
+            message = current_task.get("message", "")
+
             if status == "completed":
-                logger.info(f"{folder_name}: Import completed successfully")
+                # Check for failure keywords in message even if status is completed
+                # "No files found" is a common message when import finds nothing
+                if "failed" in message.lower() or "no files found" in message.lower():
+                    logger.warning(f"{folder_name}: Import completed with warnings/errors: {message}")
+                    if "body" in current_task and "path" in current_task["body"]:
+                        move_failed_import(current_task["body"]["path"])
+                else:
+                    logger.info(f"{folder_name}: Import completed. Message: {message}")
+
             elif status == "failed":
                 logger.error(f"{folder_name}: Import failed")
                 if "message" in current_task:
@@ -269,13 +295,15 @@ def process_imports(ctx: Any, grab_list: list):
 
     grab_list.sort(key=operator.itemgetter("author_name"))
     failed_imports = []
+    author_folders = set()
 
     for book_download in grab_list:
         try:
             author_name = book_download["author_name"]
             author_name_sanitized = sanitize_folder_name(author_name)
             folder = book_download["dir"]
-            filename = book_download["filename"]
+            # Optimization: Split on backslash per Soulseek convention and user request
+            filename = book_download["filename"].split("\\")[-1]
             book_title = book_download["title"]
             book_id = book_download["bookId"]
 
@@ -288,10 +316,11 @@ def process_imports(ctx: Any, grab_list: list):
                 continue
 
             # 1. Validate Metadata
-            if validate_metadata(source_file_path, book_title, book_id, readarr):
+            if validate_metadata(source_file_path, book_title, book_id, ctx):
                 # 2. Organize File
                 if organize_file(source_file_path, author_name_sanitized, filename, folder):
                     logger.info(f"Successfully processed {filename}")
+                    author_folders.add(author_name_sanitized)
                 else:
                     failed_imports.append((folder, filename, author_name_sanitized, "Failed to organize file"))
             else:
@@ -334,17 +363,9 @@ def process_imports(ctx: Any, grab_list: list):
             except Exception as e:
                 logger.error(f"Error handling failed import for {filename}: {e}")
 
-    # Get list of successfully processed author folders
-    try:
-        author_folders = next(os.walk("."))[1]
-        author_folders = [f for f in author_folders if f != "failed_imports"]
-    except Exception as e:
-        logger.error(f"Error listing directories: {e}")
-        author_folders = []
-
     # 3. Trigger & 4. Monitor Imports
     if author_folders:
-        commands = trigger_imports(readarr, readarr_download_dir, author_folders)
+        commands = trigger_imports(readarr, readarr_download_dir, list(author_folders))
         if commands:
             monitor_imports(readarr, commands)
         else:

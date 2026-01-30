@@ -27,6 +27,7 @@ This project is a fork of [Soularr](https://github.com/mrusse/soularr) (original
         *   **[Readarr]**: Set `api_key` and `host_url`. `download_dir` must match where Slskd saves files *as seen by Readarr*.
         *   **[Slskd]**: Set `api_key` and `host_url`.
     *   Review `[Search Settings]` to tune matching strictness.
+    *   **[Postprocessing]**: (Optional) Adjust matching thresholds (exact, normalized, loose) to control import strictness.
 
 3.  **Run**:
     *   **Docker**: `docker-compose up -d`
