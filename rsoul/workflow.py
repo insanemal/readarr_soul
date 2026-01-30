@@ -105,7 +105,7 @@ def monitor_downloads(ctx: "Context", grab_list: List[Dict[str, Any]]) -> int:
                                 if track_file["retry"] < 5:
                                     logger.info(f"Retrying file: {track_file['filename']} (Attempt {track_file['retry']})")
                                     # Re-queue specific file
-                                    requeue = download.slskd_do_enqueue(slskd, username, [track_file], book_download["dir"])
+                                    requeue = download.slskd_do_enqueue(slskd, username, [track_file], book_download.get("full_dir", book_download["dir"]))
 
                                     if requeue:
                                         # Update ID

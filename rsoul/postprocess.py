@@ -253,7 +253,7 @@ def process_imports(ctx: Any, grab_list: list):
     """Process downloaded files, validate metadata, and trigger Readarr import"""
     print_section_header("METADATA VALIDATION & IMPORT PHASE")
 
-    readarr_disable_sync = ctx.config.getboolean("Readarr", "disable_sync")
+    readarr_disable_sync = ctx.config.getboolean("Readarr", "disable_sync", fallback=False)
     slskd_download_dir = ctx.config["Slskd"]["download_dir"]
     readarr_download_dir = ctx.config["Readarr"]["download_dir"]
     readarr = ctx.readarr

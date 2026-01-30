@@ -129,6 +129,7 @@ def download_book(
             "title": target["book"]["title"],
             "bookId": target["book"]["id"],
             "dir": file_dir.split("\\")[-1],
+            "full_dir": file_dir,
             "username": username,
             "directory": directory,
             "filename": filename,
