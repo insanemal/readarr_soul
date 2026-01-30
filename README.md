@@ -13,6 +13,7 @@
 This project is a fork of [Soularr](https://github.com/mrusse/soularr) (originally for Lidarr), now fully refactored and adapted for Readarr
 
 > **Note**: This project is **not** affiliated with Readarr. Please do not contact the Readarr team for support regarding this script.
+
 > **Note2 **: This project is **not** affiliated with Soularr. Please do not contact the Soularr team for support regarding this script.
 
 ## Quick Start
